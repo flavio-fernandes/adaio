@@ -1,0 +1,6 @@
+apscheduler
+adafruit-io
+dill
+paho-mqtt
+six
+stopit

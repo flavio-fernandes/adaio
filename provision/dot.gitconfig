@@ -1,0 +1,19 @@
+[user]
+    name = Joe Doe
+    email = example@example.com
+[core]
+    editor = emacs
+[alias]
+    co = checkout
+    ss = status -s
+    st = status
+    stt = status --untracked-files=no
+    lg = log --oneline --decorate --graph
+    lga = log --oneline --decorate --graph --all
+    lbrief = log --pretty=oneline --abbrev-commit
+    branchr = remote show origin
+    # cherryfetch fetches a repo ($1) / branch ($2) and applies it rebased!
+    # https://ttboj.wordpress.com/2015/03/16/fancy-git-aliases-and-git-cherryfetch/
+    cherryfetch = !git fetch "$1" "$2" && git cherry-pick HEAD..FETCH_HEAD && true
+[push]
+    default = upstream
