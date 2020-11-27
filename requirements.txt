@@ -4,3 +4,4 @@ dill
 paho-mqtt
 six
 stopit
+requests

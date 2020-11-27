@@ -14,6 +14,7 @@ from ada import log
 from ada import mqttclient
 from ada import mqttadaio
 from ada import mqttadaiothrottle
+from ada import oweather
 
 EVENTQ_SIZE = 1000
 EVENTQ_GET_TIMEOUT = 15  # seconds
@@ -66,6 +67,17 @@ class MqttAdaIoThrottleProcess(ProcessBase):
             mqttadaiothrottle.do_iterate()
 
 
+class OWeatherProcess(ProcessBase):
+    def __init__(self, eventq_param):
+        ProcessBase.__init__(self, eventq_param)
+        oweather.do_init(self.putEvent)
+
+    def run(self):
+        logger.debug("openweather process started")
+        while True:
+            oweather.do_iterate()
+
+
 def handle_solar_rate(feed_id, payload):
     rate_scale = 10000
     trim_prefix = "home-"
@@ -82,6 +94,12 @@ def handle_solar_rate(feed_id, payload):
     return feed_id, payload2
 
 
+def _attic_cam_keep_alive():
+    logger.debug("aio attic-camera keep alive")
+    mqttadaio.publish(const.AIO_HOME_MOTION_ATTIC_CAM.split('.')[-1],
+                      'ka', const.AIO_HOME_MOTION)
+
+
 def _clear_aio_mqtt_attic():
     logger.debug("disabling aio attic event trigger now")
     mqttadaio.publish(const.AIO_HOME_MOTION_ATTIC.split('.')[-1], '0', const.AIO_HOME_MOTION)
@@ -95,10 +113,14 @@ def _start_periodic_jobs():
     global scheduler
 
     # Ref: https://python.hotexamples.com/examples/apscheduler.schedulers.background/BackgroundScheduler/add_job/python-backgroundscheduler-add_job-method-examples.html
-    # Add job to make it alive when there is no motion for a long time
+    # Add jobs to make it alive when there is no motion for a long time
     scheduler.add_job(_clear_aio_mqtt_attic, 'cron', day_of_week="wed,sun",
                       hour='13', minute=23, second=45,
                       id='periodic_clear_aio_mqtt_attic',
+                      replace_existing=True)
+    scheduler.add_job(_attic_cam_keep_alive, 'cron', day_of_week="mon,thu",
+                      hour='13', minute=23, second=45,
+                      id='periodic_attic_cam_keep_alive',
                       replace_existing=True)
     # Add catch all clearing motion. Just in case... :)
     scheduler.add_job(_fetch_attic_motion_value, 'interval', minutes=33,
@@ -153,13 +175,34 @@ def processMqttMsgEvent(client_id, topic, payload):
         topic_entry = const.MQTT_REMOTE_MAP.get(feed_id)
         if not topic_entry:
             return
-        translate_payload = {"1": "on", "0": "off"}
-        payload2 = translate_payload.get(str(payload), payload)
+        if topic_entry.local == const.AIO_TOPIC_WEATHER_CURRENT:
+            logger.debug("got aio weather: %s", payload)
+            try:
+                payload_dict = json.loads(payload)
+                precipProbability = payload_dict.get('precipProbability', 0)
+                # https://stackoverflow.com/questions/10772066/escaping-special-character-in-a-url
+                # https://www.url-encode-decode.com/
+                payload_dict['precipProbabilityPercent'] = "{}+%25".format(
+                    int(precipProbability * 100))
+                payload2 = json.dumps(payload_dict)
+            except ValueError as e:
+                logger.warning("unable to parse json aio weather %s", e)
+                payload2 = payload
+        else:
+            translate_payload = {"1": "on", "0": "off"}
+            payload2 = translate_payload.get(str(payload), payload)
         mqttclient.do_mqtt_publish(topic_entry.local, payload2)
 
 
 def processMqttConnEvent(client_id, event, rc):
     logger.debug("processMqttConnEvent client_id: %s event: %s rc: %s", client_id, event, rc)
+    if client_id == const.MQTT_CLIENT_AIO:
+        mqttclient.do_mqtt_publish(const.AIO_TOPIC_CONNECTION,
+                                   {const.MQTT_CONNECTED: "true"}.get(event, "false"))
+        if event == const.MQTT_CONNECTED:
+            _attic_cam_keep_alive()
+    elif client_id == const.MQTT_CLIENT_LOCAL:
+        oweather.do_fetch()
 
 
 def processEventMqttClient(event):
@@ -175,9 +218,31 @@ def processEventMqttClient(event):
         cmdFun()
 
 
+def processOWeatherEvent(event):
+    if event.name != "OpenWeatherEvent":
+        logger.warning("Don't know how to process event %s: %s", event.name, event.description)
+        return
+    payload = event.params[0]
+    logger.info("processOWeatherEvent: {}".format(payload))
+    data_sys = payload.get('sys', {})
+    oweather_topics = {}
+    sunrise_raw = data_sys.get('sunrise')
+    # ref: https://stackoverflow.com/questions/12400256/converting-epoch-time-into-the-datetime
+    #      https://strftime.org/
+    # time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(sunrise_raw))
+    if sunrise_raw:
+        oweather_topics['sunrise'] = time.strftime('%-H:%M', time.localtime(sunrise_raw))
+    sunset_raw = data_sys.get('sunset')
+    if sunset_raw:
+        oweather_topics['sunset'] = time.strftime('%-H:%M', time.localtime(sunset_raw))
+    for topic, mqtt_payload in oweather_topics.items():
+        mqttclient.do_mqtt_publish('/openweather/{}'.format(topic), mqtt_payload)
+
+
 def processEvent(event):
     # Based on the event, call a lambda to make mqtt and smartswitch in sync
-    syncFunHandlers = {"mqtt": processEventMqttClient, }
+    syncFunHandlers = {"mqtt": processEventMqttClient,
+                       "open_weather": processOWeatherEvent}
     cmdFun = syncFunHandlers.get(event.group)
     if not cmdFun:
         logger.warning("Don't know how to process event %s: %s", event.name, event.description)
@@ -253,6 +318,7 @@ if __name__ == "__main__":
     myProcesses.append(MqttclientProcess(eventq))
     myProcesses.append(MqttAdaIoProcess(eventq))
     myProcesses.append(MqttAdaIoThrottleProcess(eventq))
+    myProcesses.append(OWeatherProcess(eventq))
     main()
     if not stop_gracefully:
         raise RuntimeError("main is exiting")

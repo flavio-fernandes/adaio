@@ -11,6 +11,7 @@ AIO_HOME_HUMIDITY = 'home-humidity'
 AIO_HOME_LIGHT = 'home-lux'
 AIO_HOME_MOTION = 'home-motion'
 AIO_HOME_MOTION_ATTIC = '{}.attic'.format(AIO_HOME_MOTION)
+AIO_HOME_MOTION_ATTIC_CAM = '{}.attic-camera'.format(AIO_HOME_MOTION)
 AIO_HOME_ELECTRIC = 'electric-meters'
 AIO_HOME_ELECTRIC_BASELINE = 'baseline-electric'
 AIO_HOME_SOLAR_RATE = 'solar-rate'
@@ -23,17 +24,18 @@ LOCAL_ENTRIES = [
     TOPIC_ENTRY("/sensor/temperature_outside", AIO_HOME_TEMP, "outside"),
     TOPIC_ENTRY("/sensor/temperature_house", AIO_HOME_TEMP, "living-room"),
     TOPIC_ENTRY("/attic/temperature", AIO_HOME_TEMP, "attic"),
-    TOPIC_ENTRY("/rf24/basement_window/temperature", AIO_HOME_TEMP, "basement"),
+    TOPIC_ENTRY("/basement_window/temperature", AIO_HOME_TEMP, "basement"),
     TOPIC_ENTRY("/rf24/master_bedroom/temperature", AIO_HOME_TEMP, "master-bedroom"),
     TOPIC_ENTRY("/garage/temperature", AIO_HOME_TEMP, "garage"),
 
     TOPIC_ENTRY("/attic/humidity", AIO_HOME_HUMIDITY, "attic"),
-    TOPIC_ENTRY("/rf24/basement_window/humidity", AIO_HOME_HUMIDITY, "basement"),
+    TOPIC_ENTRY("/basement_window/humidity", AIO_HOME_HUMIDITY, "basement"),
     TOPIC_ENTRY("/garage/humidity", AIO_HOME_HUMIDITY, "garage"),
 
     TOPIC_ENTRY("/attic/light", AIO_HOME_LIGHT, "attic"),
     TOPIC_ENTRY("/garage/light", AIO_HOME_LIGHT, "garage"),
     TOPIC_ENTRY("/officeClock/light", AIO_HOME_LIGHT, "office"),
+    TOPIC_ENTRY("/basement_window/light", AIO_HOME_LIGHT, "basement"),
 
     # Note: attic motions are local, but treated as remote entries
     #       so they are not to be part of this block
@@ -53,6 +55,7 @@ MQTT_LOCAL_TOPICS = [entry.local for entry in LOCAL_ENTRIES]
 MQTT_LOCAL_MAP = {entry.local: entry for entry in LOCAL_ENTRIES}
 
 AIO_TOPIC_PREFIX = "/aio"
+AIO_TOPIC_CONNECTION = "{}/connected".format(AIO_TOPIC_PREFIX)
 AIO_TOPIC_RANDOMIZER = "{}/words".format(AIO_TOPIC_PREFIX)
 AIO_TOPIC_WEATHER_CURRENT = "{}/weather/current".format(AIO_TOPIC_PREFIX)
 
