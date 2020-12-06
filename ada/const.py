@@ -2,25 +2,30 @@
 
 from collections import namedtuple
 
-# FIXME(flaviof): this is pretty custom stuff ... consider moving it to some conf file
-MQTT_LOCAL_BROKER_IP = "192.168.2.238"
 TOPIC_ENTRY = namedtuple("TOPIC_ENTRY", "local group_id feed_id")
 
 AIO_HOME_TEMP = 'home-temperature'
 AIO_HOME_HUMIDITY = 'home-humidity'
 AIO_HOME_LIGHT = 'home-lux'
 AIO_HOME_MOTION = 'home-motion'
+AIO_HOME_ZONE = 'home-zone'
+AIO_HOME_CONTACT = AIO_HOME_ZONE
 AIO_HOME_MOTION_ATTIC = '{}.attic'.format(AIO_HOME_MOTION)
 AIO_HOME_MOTION_ATTIC_CAM = '{}.attic-camera'.format(AIO_HOME_MOTION)
 AIO_HOME_ELECTRIC = 'electric-meters'
 AIO_HOME_ELECTRIC_BASELINE = 'baseline-electric'
 AIO_HOME_SOLAR_RATE = 'solar-rate'
 
+AIO_CMD = "/aio/ring/cmd"
+AIO_CMD_RESTART = "restart"
+
 AIO_GROUPS = [AIO_HOME_TEMP, AIO_HOME_HUMIDITY, AIO_HOME_MOTION, AIO_HOME_ELECTRIC,
               AIO_HOME_ELECTRIC_BASELINE]
 
 # topics triggered locally
 LOCAL_ENTRIES = [
+    TOPIC_ENTRY(AIO_CMD, AIO_CMD, "ring-mqtt-cmd"),
+
     TOPIC_ENTRY("/sensor/temperature_outside", AIO_HOME_TEMP, "outside"),
     TOPIC_ENTRY("/sensor/temperature_house", AIO_HOME_TEMP, "living-room"),
     TOPIC_ENTRY("/attic/temperature", AIO_HOME_TEMP, "attic"),
@@ -45,6 +50,9 @@ LOCAL_ENTRIES = [
     TOPIC_ENTRY("/motionbox1/oper_flag/motion", AIO_HOME_MOTION, "basement"),
     TOPIC_ENTRY("/officeClock/motion", AIO_HOME_MOTION, "office"),
 
+    TOPIC_ENTRY("/ring/motion/#", AIO_HOME_MOTION, ""),
+    TOPIC_ENTRY("/ring/zone/#", AIO_HOME_ZONE, ""),
+    TOPIC_ENTRY("/ring/contact/#", AIO_HOME_CONTACT, ""),
     TOPIC_ENTRY("/electric_meter/#", AIO_HOME_ELECTRIC, ""),
     TOPIC_ENTRY("/electric_meter_baseline/#", AIO_HOME_ELECTRIC_BASELINE, ""),
 

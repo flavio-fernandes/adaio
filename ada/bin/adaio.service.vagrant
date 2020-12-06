@@ -4,7 +4,7 @@ Description=Adafruit IO to local MQTT bridge
 [Service]
 User=vagrant
 Type=simple
-ExecStartPre=/bin/bash -c 'while :; do [ -e /vagrant/ada/bin/start_adaio.sh ] && break; sleep 1; done'
+ExecStartPre=/bin/bash -c 'while :; do [ -e /vagrant/ada/bin/start_adaio.sh ] && break; /bin/sleep 1; done'
 ExecStart=/vagrant/ada/bin/start_adaio.sh
 Restart=on-failure
 

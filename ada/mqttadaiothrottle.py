@@ -48,6 +48,7 @@ def do_init(queueEventFun=None):
 
     _state = State(queueEventFun, topics)
     logger.debug("{} init called".format(_state.mqtt_client_id))
+    return _state.cmdq
 
 
 # =============================================================================

@@ -1,0 +1,18 @@
+[Unit]
+Description=ring-mqtt
+After=network.target
+
+[Service]
+User=vagrant
+Group=vagrant
+Environment=PATH=/usr/bin/
+Environment=NODE_ENV=production
+Environment=DEBUG=ring-mqtt
+ExecStartPre=/bin/bash -c 'while :; do [ -e /vagrant/ada/bin/ring-mqtt.service.vagrant ] && break; /bin/sleep 1; done'
+ExecStart=/usr/bin/node ./ring-mqtt.js
+WorkingDirectory=/home/vagrant/ring-mqtt
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
+Alias=ring-mqtt.service

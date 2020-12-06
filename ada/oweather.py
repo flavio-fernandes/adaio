@@ -3,6 +3,7 @@ import multiprocessing
 import signal
 import sys
 
+from datetime import datetime, timedelta
 import dill
 from six.moves import queue
 import stopit
@@ -25,6 +26,7 @@ class State(object):
         self.openweather_api = env.get('OPENWEATHER_API')
         self.openweather_city_id = env.get('OPENWEATHER_CITY_ID')
         self.openweather_fetch_interval = int(env.get('OPENWEATHER_INTERVAL', CMDQ_GET_TIMEOUT))
+        self.last_fetch_ts = datetime.now()
 
 
 # =============================================================================
@@ -36,6 +38,7 @@ def do_init(queueEventFun=None):
 
     _state = State(queueEventFun)
     logger.debug("init called. State: %s", _state.__dict__)
+    return _state.cmdq
 
 
 # =============================================================================
@@ -61,9 +64,13 @@ def do_iterate():
         logger.debug("executed a lambda command with params %s", params)
     except queue.Empty:
         # logger.debug("iterate noop")
-        _fetch()
+        pass
     except (KeyboardInterrupt, SystemExit):
         pass
+
+    if datetime.now() - _state.last_fetch_ts >= timedelta(
+            seconds=_state.openweather_fetch_interval):
+        _fetch()
 
 
 # =============================================================================
@@ -89,6 +96,7 @@ def _fetch():
                      timeout_ctx, e)
         return
     _notifyOpenweatherEvent(payload)
+    _state.last_fetch_ts = datetime.now()
 
 
 # =============================================================================

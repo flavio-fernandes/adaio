@@ -6,6 +6,7 @@ import sys
 import time
 
 import dill
+from os import environ as env
 import paho.mqtt.client as mqtt
 from six.moves import queue
 import stopit
@@ -30,7 +31,6 @@ class State(object):
         self.topics = topics
         self.mqtt_client = None
         self.connected = False
-        # self.next_ping_ts = datetime.datetime.now()
 
 
 # =============================================================================
@@ -40,12 +40,13 @@ class State(object):
 def do_init(queueEventFun=None):
     global _state
 
-    mqtt_broker_ip = const.MQTT_LOCAL_BROKER_IP
+    mqtt_broker_ip = env.get('MQTT_LOCAL_BROKER_IP', 'localhost')
     mqtt_client_id = const.MQTT_CLIENT_LOCAL
     topics = const.MQTT_LOCAL_TOPICS
 
     _state = State(queueEventFun, mqtt_broker_ip, mqtt_client_id, topics)
     # logger.debug("mqttclient init called")
+    return _state.cmdq
 
 
 # =============================================================================

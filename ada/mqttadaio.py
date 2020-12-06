@@ -25,7 +25,8 @@ ADAFRUIT_IO_FORECAST_ID = env.get('IO_HOME_WEATHER')
 ADAFRUIT_IO_RANDOM_ID = env.get('IO_RANDOM_ID')
 
 CMDQ_SIZE = 900
-CMDQ_GET_TIMEOUT = 300  # seconds
+CMDQ_GET_TIMEOUT = 300    # seconds
+CONNECT_TIMEOUT = 180     # seconds
 RE_SUBSCRIBE_TIME = 1201  # seconds
 _state = None
 
@@ -39,6 +40,7 @@ class State(object):
         self.forecasts = forecasts
         self.aio_client = None
         self.aio_client_connected = False
+        self.aio_client_update_ts = None
         self.aio_rest_client = None
         self.aio_rest_feeds = set()
         self.lastMsgTimeStamp = None
@@ -62,6 +64,7 @@ def do_init(queueEventFun=None):
 
     _state = State(queueEventFun, feed_ids, group_ids, forecasts)
     # logger.debug("mqtt io client init called")
+    return _state.cmdq
 
 
 # =============================================================================
@@ -69,6 +72,8 @@ def do_init(queueEventFun=None):
 def _notifyMqttConnectEvent(event):
     global _state
     logger.info("got mqtt connect event %s", event)
+    # reset timestamp used to checkpoint how long since a msg was received from adafruit.io
+    _state.lastMsgTimeStamp = None
     _notifyEvent(events.MqttConnectEvent(_state.mqtt_client_id, event))
 
 
@@ -95,6 +100,24 @@ def client_message_callback(_client, topic, payload):
     _enqueue_cmd((_notifyMqttMsgEvent, params))
 
 
+def _nuke_aio_client(_state):
+    if not _state.aio_client:
+        return
+
+    try:
+        with stopit.ThreadingTimeout(13.90, swallow_exc=False) as timeout_ctx:
+            logger.info("releasing _state.aio_client")
+            _state.aio_client.disconnect()
+            _state.aio_client._client.loop_stop()
+            del _state.aio_client
+    except Exception as e:
+        logger.error("failed to release _state.aio_client timeout_ctx %s %s",
+                     timeout_ctx, e)
+    _state.aio_client = None
+    _state.aio_client_connected = False
+    _state.aio_client_update_ts = None
+
+
 def _iterate_aio_client():
     global _state
 
@@ -105,17 +128,27 @@ def _iterate_aio_client():
         _state.aio_client = MQTTClient(ADAFRUIT_IO_USERNAME, ADAFRUIT_IO_KEY, secure=True)
         _state.aio_client.on_message = client_message_callback
         _state.aio_client_connected = False
+        _state.aio_client_update_ts = datetime.now()
         _state.aio_client.connect()
         _state.aio_client.loop_background()
         logger.debug("aio_client connect called")
         return
 
     is_connected = _state.aio_client.is_connected()
+    if _state.aio_client_update_ts and not is_connected:
+        tdelta = datetime.now() - _state.aio_client_update_ts
+        tdeltaSecs = int(tdelta.total_seconds())
+        if tdeltaSecs >= CONNECT_TIMEOUT:
+            _nuke_aio_client(_state)
+            return
+
     _check_subscription()
     if is_connected == _state.aio_client_connected:
         return
 
+    # If execution makes it this far, is_connected is changing
     _state.aio_client_connected = is_connected
+    _state.aio_client_update_ts = datetime.now()
     _notifyMqttConnectEvent(const.MQTT_CONNECTED
                             if _state.aio_client_connected else const.MQTT_DISCONNECTED)
 
@@ -175,7 +208,7 @@ def _publish(feed_id, value=None, group_id=None):
     if not _state.aio_client:
         logger.warning("no client to publish mqtt feed %s %s %s", feed_id, value, group_id)
         return
-    if not _state.aio_client.is_connected():
+    if not _state.aio_client_connected:
         logger.warning("not connected client to publish feed %s %s %s", feed_id, value, group_id)
         return
     try:
