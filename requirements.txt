@@ -5,3 +5,5 @@ paho-mqtt
 six
 stopit
 requests
+websocket-client
+websockets

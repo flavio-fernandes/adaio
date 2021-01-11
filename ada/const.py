@@ -14,13 +14,14 @@ AIO_HOME_MOTION_ATTIC = '{}.attic'.format(AIO_HOME_MOTION)
 AIO_HOME_MOTION_ATTIC_CAM = '{}.attic-camera'.format(AIO_HOME_MOTION)
 AIO_HOME_ELECTRIC = 'electric-meters'
 AIO_HOME_ELECTRIC_BASELINE = 'baseline-electric'
+AIO_HOME_ELECTRIC_DEVICE = 'home-device'
 AIO_HOME_SOLAR_RATE = 'solar-rate'
 
 AIO_CMD = "/aio/ring/cmd"
 AIO_CMD_RESTART = "restart"
 
 AIO_GROUPS = [AIO_HOME_TEMP, AIO_HOME_HUMIDITY, AIO_HOME_MOTION, AIO_HOME_ELECTRIC,
-              AIO_HOME_ELECTRIC_BASELINE]
+              AIO_HOME_ELECTRIC_BASELINE, AIO_HOME_ELECTRIC_DEVICE]
 
 # topics triggered locally
 LOCAL_ENTRIES = [
@@ -55,6 +56,8 @@ LOCAL_ENTRIES = [
     TOPIC_ENTRY("/ring/contact/#", AIO_HOME_CONTACT, ""),
     TOPIC_ENTRY("/electric_meter/#", AIO_HOME_ELECTRIC, ""),
     TOPIC_ENTRY("/electric_meter_baseline/#", AIO_HOME_ELECTRIC_BASELINE, ""),
+    TOPIC_ENTRY("/sense/data/#", AIO_HOME_ELECTRIC, ""),
+    TOPIC_ENTRY("/sense/device/#", AIO_HOME_ELECTRIC_DEVICE, ""),
 
     TOPIC_ENTRY("/solar_rate/#", AIO_HOME_SOLAR_RATE, ""),
 ]

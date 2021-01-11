@@ -25,3 +25,8 @@ class OpenWeatherEvent(Base):
     def __init__(self, payload):
         params = [payload]
         Base.__init__(self, "open_weather", "weather", params)
+
+class SenseEnergyEvent(Base):
+    def __init__(self, key, value):
+        params = [key, value]
+        Base.__init__(self, "sense_energy", "sense_data", params)

@@ -16,6 +16,7 @@ from ada import mqttclient
 from ada import mqttadaio
 from ada import mqttadaiothrottle
 from ada import oweather
+from ada import senseenergy
 
 EVENTQ_SIZE = 1000
 EVENTQ_GET_TIMEOUT = 15  # seconds
@@ -83,6 +84,17 @@ class OWeatherProcess(ProcessBase):
         logger.debug("openweather process started")
         while True:
             oweather.do_iterate()
+
+
+class SenseEnergyProcess(ProcessBase):
+    def __init__(self, eventq_param):
+        ProcessBase.__init__(self, None, eventq_param)
+        self.cmdq = senseenergy.do_init(self.putEvent)
+
+    def run(self):
+        logger.debug("sense energy process started")
+        while True:
+            senseenergy.do_iterate()
 
 
 def handle_solar_rate(feed_id, payload):
@@ -239,6 +251,7 @@ def processMqttConnEvent(client_id, event, rc):
             _attic_cam_keep_alive()
     elif client_id == const.MQTT_CLIENT_LOCAL:
         oweather.do_fetch()
+        senseenergy.do_fetch()
 
     p = _get_process(client_id)
     if p:
@@ -268,7 +281,7 @@ def processOWeatherEvent(event):
     payload = event.params[0]
     logger.info("processOWeatherEvent: {}".format(payload))
     data_sys = payload.get('sys', {})
-    oweather_topics = {}
+    oweather_topics = {'raw': json.dumps(payload)}
     sunrise_raw = data_sys.get('sunrise')
     # ref: https://stackoverflow.com/questions/12400256/converting-epoch-time-into-the-datetime
     #      https://strftime.org/
@@ -282,10 +295,21 @@ def processOWeatherEvent(event):
         mqttclient.do_mqtt_publish('/openweather/{}'.format(topic), mqtt_payload)
 
 
+def processSenseEnergyEvent(event):
+    if event.name != "SenseEnergyEvent":
+        logger.warning("Don't know how to process event %s: %s", event.name, event.description)
+        return
+    key = event.params[0]
+    value = event.params[1]
+    logger.info(f"processSenseEnergyEvent: {key} = {value}")
+    mqttclient.do_mqtt_publish(key, value)
+
+
 def processEvent(event):
     # Based on the event, call a lambda to make mqtt and smartswitch in sync
     syncFunHandlers = {"mqtt": processEventMqttClient,
-                       "open_weather": processOWeatherEvent}
+                       "open_weather": processOWeatherEvent,
+                       "sense_energy": processSenseEnergyEvent}
     cmdFun = syncFunHandlers.get(event.group)
     if not cmdFun:
         logger.warning("Don't know how to process event %s: %s", event.name, event.description)
@@ -381,6 +405,10 @@ if __name__ == "__main__":
     myProcesses.append(MqttAdaIoProcess(eventq))
     myProcesses.append(MqttAdaIoThrottleProcess(eventq))
     myProcesses.append(OWeatherProcess(eventq))
+    if senseenergy.use_sense_energy():
+        myProcesses.append(SenseEnergyProcess(eventq))
+    else:
+        logger.info("Sense Energy process not needed")
     main()
     if not stop_gracefully:
         raise RuntimeError("main is exiting")
