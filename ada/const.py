@@ -33,6 +33,8 @@ LOCAL_ENTRIES = [
     TOPIC_ENTRY("/basement_window/temperature", AIO_HOME_TEMP, "basement"),
     TOPIC_ENTRY("/rf24/master_bedroom/temperature", AIO_HOME_TEMP, "master-bedroom"),
     TOPIC_ENTRY("/garage/temperature", AIO_HOME_TEMP, "garage"),
+    TOPIC_ENTRY("/pyportalhallway/temperature", AIO_HOME_TEMP, "pyportal-hallway"),
+    TOPIC_ENTRY("/pyportalkitchen/temperature", AIO_HOME_TEMP, "pyportal-kitchen"),
 
     TOPIC_ENTRY("/attic/humidity", AIO_HOME_HUMIDITY, "attic"),
     TOPIC_ENTRY("/basement_window/humidity", AIO_HOME_HUMIDITY, "basement"),
@@ -42,6 +44,8 @@ LOCAL_ENTRIES = [
     TOPIC_ENTRY("/garage/light", AIO_HOME_LIGHT, "garage"),
     TOPIC_ENTRY("/officeClock/light", AIO_HOME_LIGHT, "office"),
     TOPIC_ENTRY("/basement_window/light", AIO_HOME_LIGHT, "basement"),
+    TOPIC_ENTRY("/pyportalhallway/light", AIO_HOME_LIGHT, "pyportal-hallway"),
+    TOPIC_ENTRY("/pyportalkitchen/light", AIO_HOME_LIGHT, "pyportal-kitchen"),
 
     # Note: attic motions are local, but treated as remote entries
     #       so they are not to be part of this block
@@ -69,6 +73,7 @@ AIO_TOPIC_PREFIX = "/aio"
 AIO_TOPIC_CONNECTION = "{}/connected".format(AIO_TOPIC_PREFIX)
 AIO_TOPIC_RANDOMIZER = "{}/words".format(AIO_TOPIC_PREFIX)
 AIO_TOPIC_WEATHER_CURRENT = "{}/weather/current".format(AIO_TOPIC_PREFIX)
+AIO_TOPIC_LOCAL_TIME = "{}/local_time".format(AIO_TOPIC_PREFIX)
 
 # topics triggered from adafruit.io
 REMOTE_ENTRIES = [

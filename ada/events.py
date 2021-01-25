@@ -21,10 +21,17 @@ class MqttConnectEvent(Base):
         Base.__init__(self, "mqtt", "mqtt conn", params)
 
 
+class LocalTimeEvent(Base):
+    def __init__(self, text, struct_time):
+        params = [text, struct_time]
+        Base.__init__(self, "local_time", "aio local time", params)
+
+
 class OpenWeatherEvent(Base):
     def __init__(self, payload):
         params = [payload]
         Base.__init__(self, "open_weather", "weather", params)
+
 
 class SenseEnergyEvent(Base):
     def __init__(self, key, value):

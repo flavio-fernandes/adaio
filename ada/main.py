@@ -139,6 +139,10 @@ def _fetch_attic_motion_value():
     mqttadaio.receive_feed_value(const.AIO_HOME_MOTION_ATTIC)
 
 
+def _fetch_local_time():
+    mqttadaio.get_local_time()
+
+
 def _set_should_check_children():
     global should_check_children
     should_check_children = True
@@ -164,6 +168,9 @@ def _start_periodic_jobs():
     scheduler.add_job(_set_should_check_children, 'interval', seconds=66,
                       id='periodic_set_should_check_children',
                       max_instances=1)
+    scheduler.add_job(_fetch_local_time, 'interval', minutes=55,
+                      id='periodic_fetch_local_time',
+                      max_instances=1, next_run_time=datetime.now() + timedelta(minutes=30))
 
 
 def _get_process(client_id):
@@ -249,6 +256,7 @@ def processMqttConnEvent(client_id, event, rc):
                                    {const.MQTT_CONNECTED: "true"}.get(event, "false"))
         if event == const.MQTT_CONNECTED:
             _attic_cam_keep_alive()
+            _fetch_local_time()
     elif client_id == const.MQTT_CLIENT_LOCAL:
         oweather.do_fetch()
         senseenergy.do_fetch()
@@ -261,6 +269,7 @@ def processMqttConnEvent(client_id, event, rc):
         elif p.disconnect_ts is None:
             p.disconnect_ts = datetime.now()
 
+
 def processEventMqttClient(event):
     syncFunHandlers = {"MqttMsgEvent": processMqttMsgEvent,
                        "MqttConnectEvent": processMqttConnEvent, }
@@ -272,6 +281,15 @@ def processEventMqttClient(event):
         cmdFun(*event.params)
     else:
         cmdFun()
+
+
+def processEventLocalTime(event):
+    if event.name != "LocalTimeEvent":
+        logger.warning("Don't know how to process event %s: %s", event.name, event.description)
+        return
+    time_text, _struct_time = event.params
+    logger.info(f"processEventLocalTime: {time_text}")
+    mqttclient.do_mqtt_publish(const.AIO_TOPIC_LOCAL_TIME, time_text)
 
 
 def processOWeatherEvent(event):
@@ -308,6 +326,7 @@ def processSenseEnergyEvent(event):
 def processEvent(event):
     # Based on the event, call a lambda to make mqtt and smartswitch in sync
     syncFunHandlers = {"mqtt": processEventMqttClient,
+                       "local_time": processEventLocalTime,
                        "open_weather": processOWeatherEvent,
                        "sense_energy": processSenseEnergyEvent}
     cmdFun = syncFunHandlers.get(event.group)

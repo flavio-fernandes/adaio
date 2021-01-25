@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 from datetime import datetime
 import multiprocessing
+import requests
 import signal
 import sys
 import time
@@ -21,6 +22,7 @@ from Adafruit_IO import RequestError as RestRequestError
 
 ADAFRUIT_IO_KEY = env['IO_KEY']
 ADAFRUIT_IO_USERNAME = env['IO_USERNAME']
+ADAFRUIT_IO_TIMEZONE = env.get('IO_TIMEZONE', 'America/New_York')
 ADAFRUIT_IO_FORECAST_ID = env.get('IO_HOME_WEATHER')
 ADAFRUIT_IO_RANDOM_ID = env.get('IO_RANDOM_ID')
 
@@ -30,6 +32,14 @@ CONNECT_TIMEOUT = 180     # seconds
 RE_SUBSCRIBE_TIME = 1201  # seconds
 _state = None
 
+TIME_SERVICE = (
+    "https://io.adafruit.com/api/v2/%s/integrations/time/strftime?x-aio-key=%s&tz=%s"
+)
+# our strftime is %Y-%m-%d %H:%M:%S.%L %j %u %z %Z see http://strftime.net/ for decoding details
+# See https://apidock.com/ruby/DateTime/strftime for full options
+TIME_SERVICE_STRFTIME = (
+    "&fmt=%25Y-%25m-%25d+%25H%3A%25M%3A%25S.%25L+%25j+%25u+%25z+%25Z"
+)
 
 class State(object):
     def __init__(self, queueEventFun, feed_ids, group_ids, forecasts):
@@ -242,6 +252,43 @@ def publish(feed_id, payload, group_id):
     payload2 = translate_payload.get(payload, payload)
     params = [feed_id, payload2, group_id]
     return _enqueue_cmd((_publish, params))
+
+
+# =============================================================================
+
+
+def _get_local_time():
+    api_url = TIME_SERVICE % (
+        ADAFRUIT_IO_USERNAME, ADAFRUIT_IO_KEY, ADAFRUIT_IO_TIMEZONE)
+    api_url += TIME_SERVICE_STRFTIME
+    try:
+        response = requests.get(api_url, timeout=10)
+    except Exception as e:
+        logger.error(f"Failed get local time: {e}")
+        return
+    if response.status_code != 200:
+        logger.error(f"Unable get local time: {response.status_code}")
+        return
+    logger.debug(f"Local time reply: {response.text}")
+    times = response.text.split(" ")
+    the_date = times[0]
+    the_time = times[1]
+    year_day = int(times[2])
+    week_day = int(times[3])
+    is_dst = None  # no way to know yet
+    year, month, mday = [int(x) for x in the_date.split("-")]
+    the_time = the_time.split(".")[0]
+    hours, minutes, seconds = [int(x) for x in the_time.split(":")]
+    now = time.struct_time(
+        (year, month, mday, hours, minutes, seconds, week_day, year_day, is_dst)
+    )
+    _notifyEvent(events.LocalTimeEvent(response.text, now))
+    response.close()
+
+
+# external to this module
+def get_local_time():
+    return _enqueue_cmd((_get_local_time, []))
 
 
 # =============================================================================
