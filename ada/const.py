@@ -31,13 +31,14 @@ LOCAL_ENTRIES = [
     TOPIC_ENTRY("/sensor/temperature_house", AIO_HOME_TEMP, "living-room"),
     TOPIC_ENTRY("/attic/temperature", AIO_HOME_TEMP, "attic"),
     TOPIC_ENTRY("/basement_window/temperature", AIO_HOME_TEMP, "basement"),
-    TOPIC_ENTRY("/rf24/master_bedroom/temperature", AIO_HOME_TEMP, "master-bedroom"),
+    TOPIC_ENTRY("/master_bedroom/temperature", AIO_HOME_TEMP, "master-bedroom"),
     TOPIC_ENTRY("/garage/temperature", AIO_HOME_TEMP, "garage"),
     TOPIC_ENTRY("/pyportalhallway/temperature", AIO_HOME_TEMP, "pyportal-hallway"),
     TOPIC_ENTRY("/pyportalkitchen/temperature", AIO_HOME_TEMP, "pyportal-kitchen"),
 
     TOPIC_ENTRY("/attic/humidity", AIO_HOME_HUMIDITY, "attic"),
     TOPIC_ENTRY("/basement_window/humidity", AIO_HOME_HUMIDITY, "basement"),
+    TOPIC_ENTRY("/master_bedroom/humidity", AIO_HOME_HUMIDITY, "master-bedroom"),
     TOPIC_ENTRY("/garage/humidity", AIO_HOME_HUMIDITY, "garage"),
 
     TOPIC_ENTRY("/attic/light", AIO_HOME_LIGHT, "attic"),

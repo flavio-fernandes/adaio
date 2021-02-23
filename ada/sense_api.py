@@ -128,12 +128,8 @@ class SenseApi(object):
         key = "production" if is_production else "consumption"
         if key not in self._trend_data[scale]: return 0
         total = self._trend_data[scale][key].get('total', 0)
-        if scale == 'DAY':
-            return total + self.get_trend('HOUR', is_production)
-        if scale == 'WEEK':
+        if scale == 'WEEK' or scale == 'MONTH':
             return total + self.get_trend('DAY', is_production)
-        if scale == 'MONTH':
-            return total + self.get_trend('WEEK', is_production)   # or DAY?
         if scale == 'YEAR':
             return total + self.get_trend('MONTH', is_production)
         return total

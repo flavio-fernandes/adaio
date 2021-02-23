@@ -4,6 +4,7 @@ dill
 paho-mqtt
 six
 stopit
+ratelimiter
 requests
 websocket-client
 websockets

@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 from datetime import datetime
 import multiprocessing
+from ratelimiter import RateLimiter
 import requests
 import signal
 import sys
@@ -212,7 +213,15 @@ def do_iterate():
 
 # =============================================================================
 
+# Throttle adafruit calls
+# https://pypi.org/project/ratelimiter/
+# https://github.com/RazerM/ratelimiter
+def _limited(until):
+    duration = int(round(until - time.time()))
+    logger.warning('Rate limited publish, sleeping for {:d} seconds'.format(duration))
 
+
+@RateLimiter(max_calls=56, period=60, callback=_limited)
 def _publish(feed_id, value=None, group_id=None):
     global _state
     if not _state.aio_client:
