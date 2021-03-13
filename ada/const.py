@@ -16,21 +16,30 @@ AIO_HOME_ELECTRIC = 'electric-meters'
 AIO_HOME_ELECTRIC_BASELINE = 'baseline-electric'
 AIO_HOME_ELECTRIC_DEVICE = 'home-device'
 AIO_HOME_SOLAR_RATE = 'solar-rate'
+AIO_UPTIME_MINUTES = 'device-uptime'
+AIO_MEMORY = 'device-free-memory'
 
-AIO_CMD = "/aio/ring/cmd"
-AIO_CMD_RESTART = "restart"
+AIO_LOCAL_CMD = "/aio/local/cmd"
+AIO_LOCAL_CMD_GET_LOCAL_TIME_WEATHER = "get_local_time_and_weather"
+AIO_RING_CMD = "/aio/ring/cmd"
+AIO_RING_CMD_RESTART = "restart"
 
 AIO_GROUPS = [AIO_HOME_TEMP, AIO_HOME_HUMIDITY, AIO_HOME_MOTION, AIO_HOME_ELECTRIC,
               AIO_HOME_ELECTRIC_BASELINE, AIO_HOME_ELECTRIC_DEVICE]
 
 # topics triggered locally
 LOCAL_ENTRIES = [
-    TOPIC_ENTRY(AIO_CMD, AIO_CMD, "ring-mqtt-cmd"),
+    TOPIC_ENTRY(AIO_LOCAL_CMD, AIO_LOCAL_CMD, "local-cmd"),
+    TOPIC_ENTRY(AIO_RING_CMD, AIO_RING_CMD, "ring-mqtt-cmd"),
+
+    TOPIC_ENTRY("/openweather/temp_min", AIO_HOME_TEMP, "minimum"),
+    TOPIC_ENTRY("/openweather/temp_max", AIO_HOME_TEMP, "maximum"),
 
     TOPIC_ENTRY("/sensor/temperature_outside", AIO_HOME_TEMP, "outside"),
     TOPIC_ENTRY("/sensor/temperature_house", AIO_HOME_TEMP, "living-room"),
     TOPIC_ENTRY("/attic/temperature", AIO_HOME_TEMP, "attic"),
     TOPIC_ENTRY("/basement_window/temperature", AIO_HOME_TEMP, "basement"),
+    TOPIC_ENTRY("/dining_room/temperature", AIO_HOME_TEMP, "dining-room"),
     TOPIC_ENTRY("/master_bedroom/temperature", AIO_HOME_TEMP, "master-bedroom"),
     TOPIC_ENTRY("/garage/temperature", AIO_HOME_TEMP, "garage"),
     TOPIC_ENTRY("/pyportalhallway/temperature", AIO_HOME_TEMP, "pyportal-hallway"),
@@ -38,6 +47,7 @@ LOCAL_ENTRIES = [
 
     TOPIC_ENTRY("/attic/humidity", AIO_HOME_HUMIDITY, "attic"),
     TOPIC_ENTRY("/basement_window/humidity", AIO_HOME_HUMIDITY, "basement"),
+    TOPIC_ENTRY("/dining_room/humidity", AIO_HOME_HUMIDITY, "dining-room"),
     TOPIC_ENTRY("/master_bedroom/humidity", AIO_HOME_HUMIDITY, "master-bedroom"),
     TOPIC_ENTRY("/garage/humidity", AIO_HOME_HUMIDITY, "garage"),
 
@@ -48,6 +58,14 @@ LOCAL_ENTRIES = [
     TOPIC_ENTRY("/pyportalhallway/light", AIO_HOME_LIGHT, "pyportal-hallway"),
     TOPIC_ENTRY("/pyportalkitchen/light", AIO_HOME_LIGHT, "pyportal-kitchen"),
 
+    TOPIC_ENTRY("/pyportalhallway/status", [AIO_UPTIME_MINUTES, AIO_MEMORY], "pyportal-hallway"),
+    TOPIC_ENTRY("/pyportalkitchen/status", [AIO_UPTIME_MINUTES, AIO_MEMORY], "pyportal-kitchen"),
+    TOPIC_ENTRY("/kitchen_clock/status", [AIO_UPTIME_MINUTES, AIO_MEMORY], "kitchen-clock"),
+    TOPIC_ENTRY("/dining_room/oper_uptime_minutes", AIO_UPTIME_MINUTES, "dining-room"),
+    TOPIC_ENTRY("/basement_window/oper_uptime_minutes", AIO_UPTIME_MINUTES, "basement"),
+    TOPIC_ENTRY("/master_bedroom/oper_uptime_minutes", AIO_UPTIME_MINUTES, "master-bedroom"),
+    TOPIC_ENTRY("/attic/oper_uptime_minutes", AIO_UPTIME_MINUTES, "attic"),
+
     # Note: attic motions are local, but treated as remote entries
     #       so they are not to be part of this block
     TOPIC_ENTRY("/garage/oper_flag/motion", AIO_HOME_MOTION, "garage"),
@@ -56,8 +74,10 @@ LOCAL_ENTRIES = [
     TOPIC_ENTRY("/motionbox1/oper_flag/motion", AIO_HOME_MOTION, "basement"),
     TOPIC_ENTRY("/officeClock/motion", AIO_HOME_MOTION, "office"),
 
-    TOPIC_ENTRY("/ring/motion/#", AIO_HOME_MOTION, ""),
+    TOPIC_ENTRY("/garage_door/zetsu", AIO_HOME_ZONE, "garage-east"),
+    TOPIC_ENTRY("/garage_door/zelda", AIO_HOME_ZONE, "garage-west"),
     TOPIC_ENTRY("/ring/zone/#", AIO_HOME_ZONE, ""),
+    TOPIC_ENTRY("/ring/motion/#", AIO_HOME_MOTION, ""),
     TOPIC_ENTRY("/ring/contact/#", AIO_HOME_CONTACT, ""),
     TOPIC_ENTRY("/electric_meter/#", AIO_HOME_ELECTRIC, ""),
     TOPIC_ENTRY("/electric_meter_baseline/#", AIO_HOME_ELECTRIC_BASELINE, ""),
