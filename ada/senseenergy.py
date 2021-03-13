@@ -128,12 +128,12 @@ def _fetch():
                     collected_values['active_solar_power'])
             collected_values['all_devices'] = [
                 device.lower().replace(' ', '_')
-                for device in _state.all_devices
-                if device.lower() != 'solar' or collected_values['active_solar_power']]
+                for device in _state.all_devices]
             collected_values['active_devices'] = {
                 device.lower().replace(' ', '_')
                 for device in _state.sense_api.active_devices
-                if device in _state.all_devices}
+                if device in _state.all_devices and (
+                    device.lower() != 'solar' or collected_values['active_solar_power'])}
 
             # Hack: work around issue where value goes backwards at midnight
             new_yearly_production = _state.sense_api.yearly_production
