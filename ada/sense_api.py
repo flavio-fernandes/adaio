@@ -117,12 +117,18 @@ class SenseApi(object):
     def yearly_production(self):
         return self.get_trend('YEAR', True)
 
-    def get_consumption_trend(self, scale):
+    def _get_x_trend(self, key, scale):
         try:
-            return self._trend_data[scale]["consumption"]["total"]
+            return self._trend_data[scale][key]["total"]
         except KeyError:
             pass
         return 0
+
+    def get_consumption_trend(self, scale):
+        return self._get_x_trend("consumption", scale)
+
+    def get_production_trend(self, scale):
+        return self._get_x_trend("production", scale)
 
     def get_trend(self, scale, is_production):
         key = "production" if is_production else "consumption"

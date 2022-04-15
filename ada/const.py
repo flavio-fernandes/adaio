@@ -7,6 +7,7 @@ TOPIC_ENTRY = namedtuple("TOPIC_ENTRY", "local group_id feed_id")
 AIO_HOME_TEMP = 'home-temperature'
 AIO_HOME_HUMIDITY = 'home-humidity'
 AIO_HOME_LIGHT = 'home-lux'
+AIO_HOME_BATTERY = 'home-battery'
 AIO_HOME_MOTION = 'home-motion'
 AIO_HOME_ZONE = 'home-zone'
 AIO_HOME_CONTACT = AIO_HOME_ZONE
@@ -44,12 +45,14 @@ LOCAL_ENTRIES = [
     TOPIC_ENTRY("/garage/temperature", AIO_HOME_TEMP, "garage"),
     TOPIC_ENTRY("/pyportalhallway/temperature", AIO_HOME_TEMP, "pyportal-hallway"),
     TOPIC_ENTRY("/pyportalkitchen/temperature", AIO_HOME_TEMP, "pyportal-kitchen"),
+    TOPIC_ENTRY("zwave/shed/sensor_multilevel/endpoint_0/Air_temperature", AIO_HOME_TEMP, "shed"),
 
     TOPIC_ENTRY("/attic/humidity", AIO_HOME_HUMIDITY, "attic"),
     TOPIC_ENTRY("/basement_window/humidity", AIO_HOME_HUMIDITY, "basement"),
     TOPIC_ENTRY("/dining_room/humidity", AIO_HOME_HUMIDITY, "dining-room"),
     TOPIC_ENTRY("/master_bedroom/humidity", AIO_HOME_HUMIDITY, "master-bedroom"),
     TOPIC_ENTRY("/garage/humidity", AIO_HOME_HUMIDITY, "garage"),
+    TOPIC_ENTRY("zwave/shed/sensor_multilevel/endpoint_0/Humidity", AIO_HOME_HUMIDITY, "shed"),
 
     TOPIC_ENTRY("/attic/light", AIO_HOME_LIGHT, "attic"),
     TOPIC_ENTRY("/garage/light", AIO_HOME_LIGHT, "garage"),
@@ -57,6 +60,7 @@ LOCAL_ENTRIES = [
     TOPIC_ENTRY("/basement_window/light", AIO_HOME_LIGHT, "basement"),
     TOPIC_ENTRY("/pyportalhallway/light", AIO_HOME_LIGHT, "pyportal-hallway"),
     TOPIC_ENTRY("/pyportalkitchen/light", AIO_HOME_LIGHT, "pyportal-kitchen"),
+    TOPIC_ENTRY("zwave/shed/sensor_multilevel/endpoint_0/Illuminance", AIO_HOME_LIGHT, "shed"),
 
     TOPIC_ENTRY("/pyportalhallway/status", [AIO_UPTIME_MINUTES, AIO_MEMORY], "pyportal-hallway"),
     TOPIC_ENTRY("/pyportalkitchen/status", [AIO_UPTIME_MINUTES, AIO_MEMORY], "pyportal-kitchen"),
@@ -66,6 +70,9 @@ LOCAL_ENTRIES = [
     TOPIC_ENTRY("/master_bedroom/oper_uptime_minutes", AIO_UPTIME_MINUTES, "master-bedroom"),
     TOPIC_ENTRY("/attic/oper_uptime_minutes", AIO_UPTIME_MINUTES, "attic"),
 
+    TOPIC_ENTRY("/buttonbox2/uptime", AIO_UPTIME_MINUTES, "trellis-office"),
+    TOPIC_ENTRY("/buttonbox2/memory", AIO_MEMORY, "trellis-office"),
+
     # Note: attic motions are local, but treated as remote entries
     #       so they are not to be part of this block
     TOPIC_ENTRY("/garage/oper_flag/motion", AIO_HOME_MOTION, "garage"),
@@ -73,12 +80,19 @@ LOCAL_ENTRIES = [
     TOPIC_ENTRY("/kitchen_steps/oper_flag/motion", AIO_HOME_MOTION, "garage"),
     TOPIC_ENTRY("/motionbox1/oper_flag/motion", AIO_HOME_MOTION, "basement"),
     TOPIC_ENTRY("/officeClock/motion", AIO_HOME_MOTION, "office"),
+    TOPIC_ENTRY("zwave/shed/sensor_binary/endpoint_0/Any", AIO_HOME_MOTION, "shed"),
 
-    TOPIC_ENTRY("/garage_door/zetsu", AIO_HOME_ZONE, "garage-east"),
-    TOPIC_ENTRY("/garage_door/zelda", AIO_HOME_ZONE, "garage-west"),
+    # TOPIC_ENTRY("zwave/shed/battery/endpoint_0/level", AIO_HOME_BATTERY, "shed"),  # not useful
+
+    TOPIC_ENTRY("/garage_door/zelda", AIO_HOME_ZONE, "garage-east"),
+    TOPIC_ENTRY("/garage_door/zen", AIO_HOME_ZONE, "garage-west"),
     TOPIC_ENTRY("/ring/zone/#", AIO_HOME_ZONE, ""),
     TOPIC_ENTRY("/ring/motion/#", AIO_HOME_MOTION, ""),
     TOPIC_ENTRY("/ring/contact/#", AIO_HOME_CONTACT, ""),
+    TOPIC_ENTRY("/zwave/waterpump/watts", AIO_HOME_ELECTRIC, "water-pump-power"),
+    TOPIC_ENTRY("/zwave/waterpump/kwh", AIO_HOME_ELECTRIC, "water-pump"),
+    TOPIC_ENTRY("/zwave/minisplit/watts", AIO_HOME_ELECTRIC, "mini-split-power"),
+    TOPIC_ENTRY("/zwave/minisplit/kwh", AIO_HOME_ELECTRIC, "mini-split"),
     TOPIC_ENTRY("/electric_meter/#", AIO_HOME_ELECTRIC, ""),
     TOPIC_ENTRY("/electric_meter_baseline/#", AIO_HOME_ELECTRIC_BASELINE, ""),
     TOPIC_ENTRY("/sense/data/#", AIO_HOME_ELECTRIC, ""),

@@ -114,27 +114,35 @@ def handle_solar_rate(feed_id, payload):
     return feed_id, payload2
 
 
-def _handle_device_json(feed_id, payload, attribute):
+def _handle_device_json(feed_id, payload, search_attributes):
     try:
         _payload_float = float(payload)
         return feed_id, payload
     except ValueError:
         pass
+
     try:
         payload_dict = json.loads(payload)
-        payload2 = payload_dict[attribute]
+        payload2 = None
+        for search_attribute in search_attributes:
+            if search_attribute in payload_dict:
+                payload2 = payload_dict[search_attribute]
+                break
     except Exception as e:
-        logger.warning(f"Failed to extract {attribute} from {feed_id} {payload} {e}")
+        logger.warning(f"Failed to extract {search_attributes} from {feed_id} {payload} {e}")
+        return None, None
+    if payload2 is None:
+        logger.warning(f"Failed to find any of {search_attributes} from {feed_id} in {payload}")
         return None, None
     return feed_id, payload2
 
 
 def handle_device_memory(feed_id, payload):
-    return _handle_device_json(feed_id, payload, 'mem_free')
+    return _handle_device_json(feed_id, payload, ('mem_free', 'freeKb',))
 
 
 def handle_device_uptime(feed_id, payload):
-    return _handle_device_json(feed_id, payload, 'uptime_mins')
+    return _handle_device_json(feed_id, payload, ('uptime_mins', 'up',))
 
 
 def handle_aio_cmd(_feed_id, payload):
@@ -150,6 +158,12 @@ def handle_aio_cmd(_feed_id, payload):
         oweather.do_fetch()
     # Return none so there is not a publish to aio from this
     return None, None
+
+
+def handle_home_motion(feed_id, payload):
+    translate_payload = {"true": 1, "false": 0}
+    payload2 = translate_payload.get(payload, payload)
+    return feed_id, payload2
 
 
 def handle_home_zone(feed_id, payload):
@@ -227,6 +241,7 @@ def processMqttMsgEvent(client_id, topic, payload):
             const.AIO_HOME_SOLAR_RATE: handle_solar_rate,
             const.AIO_LOCAL_CMD: handle_aio_cmd,
             const.AIO_RING_CMD: handle_aio_cmd,
+            const.AIO_HOME_MOTION: handle_home_motion,
             const.AIO_HOME_ZONE: handle_home_zone,
             const.AIO_UPTIME_MINUTES: handle_device_uptime,
             const.AIO_MEMORY: handle_device_memory,

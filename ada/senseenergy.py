@@ -32,8 +32,6 @@ class State(object):
         self.sense_api = None
         self.all_devices = None
         self.sense_api_fails = 0
-        self.cached_yearly_production = 0
-        self.cached_yearly_consumption = 0
 
 
 # =============================================================================
@@ -62,12 +60,12 @@ def _notifySenseEnergyEvent(collected_values):
 
     for key, value in collected_values.items():
         _state.queueEventFun(events.SenseEnergyEvent(f"/sense/data/{key}", value))
-        time.sleep(0.5)
+        time.sleep(1.2)
 
     for device in all_devices:
         value = 'on' if device in active_devices else 'off'
         _state.queueEventFun(events.SenseEnergyEvent(f"/sense/device/{device}", value))
-        time.sleep(0.5)
+        time.sleep(1.6)
 
 
 # =============================================================================
@@ -135,28 +133,13 @@ def _fetch():
                 if device in _state.all_devices and (
                     device.lower() != 'solar' or collected_values['active_solar_power'])}
 
-            # Hack: work around issue where value goes backwards at midnight
-            new_yearly_production = _state.sense_api.yearly_production
-            if _state.cached_yearly_production > new_yearly_production:
-                logger.warning(f"Skipping backwards yearly_production "
-                               f"new:{new_yearly_production} "
-                               f"old:{_state.cached_yearly_production}")
-            else:
-                collected_values['yearly_production'] = new_yearly_production
-                _state.cached_yearly_production = new_yearly_production
-
-            new_yearly_consumption = _state.sense_api.yearly_consumption
-            if _state.cached_yearly_consumption > new_yearly_consumption:
-                logger.warning(f"Skipping backwards yearly_consumption "
-                               f"new:{new_yearly_consumption} "
-                               f"old:{_state.cached_yearly_consumption}")
-            else:
-                collected_values['yearly_consumption'] = new_yearly_consumption
-                _state.cached_yearly_consumption = new_yearly_consumption
-
             for sense_scale in sense_scales:
                 scale_key = 'consumption_{}'.format(sense_scale.lower())
                 collected_values[scale_key] = _state.sense_api.get_consumption_trend(sense_scale)
+
+                scale_key = 'production_{}'.format(sense_scale.lower())
+                collected_values[scale_key] = _state.sense_api.get_production_trend(sense_scale)
+
         _state.sense_api_fails = 0
     except Exception as e:
         _state.sense_api_fails += 1
