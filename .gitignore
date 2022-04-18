@@ -3,6 +3,8 @@
 .secrets
 provision/secrets.txt
 .knobs
+evbays/sema_cookie_jar
+evbays/sema.json
 __pycache__
 env/
 junk/

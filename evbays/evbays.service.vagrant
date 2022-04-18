@@ -1,0 +1,11 @@
+[Unit]
+Description=EV bays Collect service
+Wants=evbays.timer
+
+[Service]
+User=vagrant
+Type=oneshot
+ExecStart=/vagrant/evbays/evbays.sh
+
+[Install]
+WantedBy=multi-user.target

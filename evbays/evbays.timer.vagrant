@@ -1,0 +1,12 @@
+[Unit]
+Description=Run evbays periodically
+Requires=evbays.service
+
+[Timer]
+Unit=evbays.service
+#OnCalendar=*-*-* 6-18:*/10:00
+#OnCalendar=Mon-Fri *-*-* 6-18:*/10:00
+OnCalendar=Mon-Fri *-*-* 6,7,8,9,10,11,12,13,14,15,16,17,18:0,5,10,15,20,30,40,50,55:*
+
+[Install]
+WantedBy=timers.target

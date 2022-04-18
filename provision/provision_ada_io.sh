@@ -16,6 +16,7 @@ ln -s /vagrant/scripts
 ln -s /vagrant/ada/bin
 ln -s /vagrant/ada/bin/tail_log.sh ~/
 ln -s /vagrant/ada/bin/svc_ctl.sh ~/
+ln -s /vagrant/evbays
 
 sudo cp -v /vagrant/ada/bin/adaio.service.vagrant /lib/systemd/system/adaio.service
 sudo systemctl enable --now adaio.service

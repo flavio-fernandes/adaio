@@ -37,3 +37,9 @@ class SenseEnergyEvent(Base):
     def __init__(self, key, value):
         params = [key, value]
         Base.__init__(self, "sense_energy", "sense_data", params)
+
+
+class EVBaysEvent(Base):
+    def __init__(self, payload):
+        params = [payload]
+        Base.__init__(self, "ev_bays", "ev bays update", params)

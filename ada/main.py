@@ -11,6 +11,8 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from six.moves import queue
 
 from ada import const
+from ada import evbays
+from ada import evbays_state
 from ada import events
 from ada import log
 from ada import mqttadaio
@@ -96,6 +98,21 @@ class SenseEnergyProcess(ProcessBase):
         logger.debug("sense energy process started")
         while True:
             senseenergy.do_iterate()
+
+
+class EVBaysProcess(ProcessBase):
+    def __init__(self, eventq_param):
+        ProcessBase.__init__(self, None, eventq_param)
+        self.cmdq = evbays.do_init(self.putEvent)
+
+    def run(self):
+        logger.debug("evbays process started")
+        while True:
+            evbays.do_iterate()
+
+    @staticmethod
+    def do_fetch_now():
+        evbays.do_fetch(force=True)
 
 
 def handle_solar_rate(feed_id, payload):
@@ -310,6 +327,8 @@ def processMqttMsgEvent(client_id, topic, payload):
 
 
 def processMqttConnEvent(client_id, event, rc):
+    global bays
+
     logger.debug("processMqttConnEvent client_id: %s event: %s rc: %s", client_id, event, rc)
     if client_id == const.MQTT_CLIENT_AIO:
         mqttclient.do_mqtt_publish(const.AIO_TOPIC_CONNECTION,
@@ -317,6 +336,8 @@ def processMqttConnEvent(client_id, event, rc):
         if event == const.MQTT_CONNECTED:
             _attic_cam_keep_alive()
             _fetch_local_time()
+            if evbays.use_evbays():
+                bays.clear_cache()
     elif client_id == const.MQTT_CLIENT_LOCAL:
         oweather.do_fetch()
         senseenergy.do_fetch()
@@ -403,12 +424,41 @@ def processSenseEnergyEvent(event):
     mqttclient.do_mqtt_publish(key, value)
 
 
+def processEVBaysEvent(event):
+    global bays
+
+    if event.name != "EVBaysEvent":
+        logger.warning("Don't know how to process event %s: %s", event.name, event.description)
+        return
+    payload = event.params[0]
+    logger.info("EVBaysEvent: {}".format(payload))
+    try:
+        payload_dict = json.loads(payload)
+        changed_bays = bays.process(payload_dict)
+    except ValueError as e:
+        logger.warning("unable to parse json ev bays %s", e)
+        return
+
+    last_update = datetime.now()
+    mqttadaio.publish("last-update", last_update.isoformat(), const.AIO_EV_BAYS)
+    mqttadaio.publish("last-update-pretty", last_update.strftime("%c"), const.AIO_EV_BAYS)
+
+    # for each changed bays, publish to adafruit io
+    for changed_bay in changed_bays:
+        bay_name = changed_bay.name.lower().replace("westford-", "bay")
+        mqttadaio.publish(f"{bay_name}-status", changed_bay.status, const.AIO_EV_BAYS)
+        mqttadaio.publish(f"{bay_name}-ts", changed_bay.ts, const.AIO_EV_BAYS)
+        mqttadaio.publish(f"{bay_name}-simpletime", changed_bay.simpletime, const.AIO_EV_BAYS)
+
+
 def processEvent(event):
     # Based on the event, call a lambda to make mqtt and smartswitch in sync
     syncFunHandlers = {"mqtt": processEventMqttClient,
                        "local_time": processEventLocalTime,
                        "open_weather": processOWeatherEvent,
-                       "sense_energy": processSenseEnergyEvent}
+                       "sense_energy": processSenseEnergyEvent,
+                       "ev_bays": processEVBaysEvent,
+                       }
     cmdFun = syncFunHandlers.get(event.group)
     if not cmdFun:
         logger.warning("Don't know how to process event %s: %s", event.name, event.description)
@@ -486,10 +536,9 @@ eventq = None
 myProcesses = []
 scheduler = None
 should_check_children = False
+bays = None
 
 if __name__ == "__main__":
-    # global logger, eventq, myProcesses
-
     logger = log.getLogger()
     log.initLogger()
 
@@ -508,6 +557,12 @@ if __name__ == "__main__":
         myProcesses.append(SenseEnergyProcess(eventq))
     else:
         logger.info("Sense Energy process not needed")
+    if evbays.use_evbays():
+        evbays_process = EVBaysProcess(eventq)
+        bays = evbays_state.init(evbays_process)
+        myProcesses.append(evbays_process)
+    else:
+        logger.info("EV bays process not needed")
     main()
     if not stop_gracefully:
         raise RuntimeError("main is exiting")

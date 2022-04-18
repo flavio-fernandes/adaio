@@ -4,6 +4,7 @@ from collections import namedtuple
 
 TOPIC_ENTRY = namedtuple("TOPIC_ENTRY", "local group_id feed_id")
 
+AIO_EV_BAYS = "ev"
 AIO_HOME_TEMP = 'home-temperature'
 AIO_HOME_HUMIDITY = 'home-humidity'
 AIO_HOME_LIGHT = 'home-lux'
@@ -17,8 +18,8 @@ AIO_HOME_ELECTRIC = 'electric-meters'
 AIO_HOME_ELECTRIC_BASELINE = 'baseline-electric'
 AIO_HOME_ELECTRIC_DEVICE = 'home-device'
 AIO_HOME_SOLAR_RATE = 'solar-rate'
-AIO_UPTIME_MINUTES = 'device-uptime'
 AIO_MEMORY = 'device-free-memory'
+AIO_UPTIME_MINUTES = 'device-uptime'
 
 AIO_LOCAL_CMD = "/aio/local/cmd"
 AIO_LOCAL_CMD_GET_LOCAL_TIME_WEATHER = "get_local_time_and_weather"
