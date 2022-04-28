@@ -1,13 +1,10 @@
 #!/usr/bin/env python
 
+import re
 from datetime import datetime
 from collections import namedtuple
 
-CHANGED_BAY = namedtuple("CHANGED_BAY", "name status ts simpletime")
-
-
-def init(evbays_process):
-    return BayState(evbays_process)
+CHANGED_BAY = namedtuple("CHANGED_BAY", "name status statuscode ts simpletime")
 
 
 class Bay(object):
@@ -33,7 +30,9 @@ class BayState(object):
         self.cache = {}
 
     def process(self, payload_dict):
+        bays_tmp = {}
         changed_bays = []
+        available_bays = 0
         aaData = payload_dict.get("aaData", {})
         stations = aaData.get("stations", [])
 
@@ -46,6 +45,14 @@ class BayState(object):
                 continue
 
             bay = Bay(name, status)
+            if bay.status_code == 0:
+                available_bays += 1
+
+            # Get a number out of the name. We do not care about number 0
+            bay_index_str = ''.join(re.findall("[0-9]", name))
+            if bay_index_str:
+                bays_tmp[int(bay_index_str)] = str(bay.status_code)
+
             if bay.name in self.cache and self.cache[bay.name].status == status:
                 continue
 
@@ -54,13 +61,19 @@ class BayState(object):
             is_expected_code = bay.status_code <= 1
             cb = CHANGED_BAY(
                 bay.name,
+                bay.status,
                 bay.status_code,
                 bay.last_status_change.isoformat(),
                 simple_time if is_expected_code else bay.status,
             )
             changed_bays.append(cb)
 
-        return changed_bays
+        # Assemble a string with bays 1 to 6. "3" filled as pad.
+        bays_str = ""
+        for bay_index in range(1, 7):
+            bays_str += bays_tmp.get(bay_index, "3")
+
+        return bays_str, changed_bays, available_bays
 
     def clear_cache(self):
         self.cache = {}

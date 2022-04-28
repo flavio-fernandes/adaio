@@ -197,6 +197,12 @@ def _attic_cam_keep_alive():
                       'ka', const.AIO_HOME_MOTION)
 
 
+def _evbays_clear_ts():
+    logger.debug("aio evbays clear timestamps")
+    for bay_index in range(1, 7):
+        mqttadaio.publish(f"bay{bay_index}-simpletime", "--", const.AIO_EV_BAYS)
+
+
 def _clear_aio_mqtt_attic():
     logger.debug("disabling aio attic event trigger now")
     mqttadaio.publish(const.AIO_HOME_MOTION_ATTIC.split('.')[-1], '0', const.AIO_HOME_MOTION)
@@ -227,6 +233,10 @@ def _start_periodic_jobs():
     scheduler.add_job(_attic_cam_keep_alive, 'cron', day_of_week="mon,thu",
                       hour='13', minute=23, second=45,
                       id='periodic_attic_cam_keep_alive',
+                      replace_existing=True)
+    scheduler.add_job(_evbays_clear_ts, 'cron', day_of_week="*",
+                      hour='23', minute=23, second=23,
+                      id='periodic_evbays_clear_ts',
                       replace_existing=True)
     # Add catch all clearing motion. Just in case... :)
     scheduler.add_job(_fetch_attic_motion_value, 'interval', minutes=33,
@@ -327,7 +337,7 @@ def processMqttMsgEvent(client_id, topic, payload):
 
 
 def processMqttConnEvent(client_id, event, rc):
-    global bays
+    global bays_state
 
     logger.debug("processMqttConnEvent client_id: %s event: %s rc: %s", client_id, event, rc)
     if client_id == const.MQTT_CLIENT_AIO:
@@ -337,7 +347,7 @@ def processMqttConnEvent(client_id, event, rc):
             _attic_cam_keep_alive()
             _fetch_local_time()
             if evbays.use_evbays():
-                bays.clear_cache()
+                bays_state.clear_cache()
     elif client_id == const.MQTT_CLIENT_LOCAL:
         oweather.do_fetch()
         senseenergy.do_fetch()
@@ -425,7 +435,7 @@ def processSenseEnergyEvent(event):
 
 
 def processEVBaysEvent(event):
-    global bays
+    global bays_state
 
     if event.name != "EVBaysEvent":
         logger.warning("Don't know how to process event %s: %s", event.name, event.description)
@@ -434,21 +444,29 @@ def processEVBaysEvent(event):
     logger.info("EVBaysEvent: {}".format(payload))
     try:
         payload_dict = json.loads(payload)
-        changed_bays = bays.process(payload_dict)
+        bays, changed_bays, available_bays = bays_state.process(payload_dict)
     except ValueError as e:
         logger.warning("unable to parse json ev bays %s", e)
         return
 
     last_update = datetime.now()
-    mqttadaio.publish("last-update", last_update.isoformat(), const.AIO_EV_BAYS)
+    # mqttadaio.publish("last-update-iso", last_update.isoformat(), const.AIO_EV_BAYS)
+    mqttadaio.publish("last-update", last_update.strftime("%a %I:%M"), const.AIO_EV_BAYS)
     mqttadaio.publish("last-update-pretty", last_update.strftime("%c"), const.AIO_EV_BAYS)
 
     # for each changed bays, publish to adafruit io
     for changed_bay in changed_bays:
         bay_name = changed_bay.name.lower().replace("westford-", "bay")
         mqttadaio.publish(f"{bay_name}-status", changed_bay.status, const.AIO_EV_BAYS)
-        mqttadaio.publish(f"{bay_name}-ts", changed_bay.ts, const.AIO_EV_BAYS)
+        mqttadaio.publish(f"{bay_name}", changed_bay.statuscode, const.AIO_EV_BAYS)
+        # mqttadaio.publish(f"{bay_name}-ts", changed_bay.ts, const.AIO_EV_BAYS)
         mqttadaio.publish(f"{bay_name}-simpletime", changed_bay.simpletime, const.AIO_EV_BAYS)
+
+    # publish text and bays every time a change on bays is detected
+    if changed_bays:
+        mqttadaio.publish("bays", bays, const.AIO_EV_BAYS)
+        mqttadaio.publish("text", "EV Bays", const.AIO_EV_BAYS)
+        mqttadaio.publish("available", f"{available_bays}", const.AIO_EV_BAYS)
 
 
 def processEvent(event):
@@ -536,7 +554,7 @@ eventq = None
 myProcesses = []
 scheduler = None
 should_check_children = False
-bays = None
+bays_state = None
 
 if __name__ == "__main__":
     logger = log.getLogger()
@@ -559,7 +577,7 @@ if __name__ == "__main__":
         logger.info("Sense Energy process not needed")
     if evbays.use_evbays():
         evbays_process = EVBaysProcess(eventq)
-        bays = evbays_state.init(evbays_process)
+        bays_state = evbays_state.BayState(evbays_process)
         myProcesses.append(evbays_process)
     else:
         logger.info("EV bays process not needed")

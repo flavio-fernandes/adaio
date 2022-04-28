@@ -5,8 +5,8 @@ set -o xtrace
 [ $EUID -eq 0 ] && { echo 'must NOT be root' >&2; exit 1; } ||:
 
 cd "$(dirname $0)"
-[ -e "/vagrant/.secrets" ] && source /vagrant/.secrets
-[ -e "/vagrant/.knobs" ] && source /vagrant/.knobs
+[ -e "/vagrant/.secrets" ] && source /vagrant/.secrets ||:
+[ -e "/vagrant/.knobs" ] && source /vagrant/.knobs ||:
 
 # SEMA_LOGIN should look like this
 # uname=foo@example.com&upass=superSecretHashGoesHere&type=WEB
@@ -19,14 +19,14 @@ cd "$(dirname $0)"
 remove_sema_cookie_jar="yes"
 TMPFILE=$(mktemp -p /tmp -t sema.json.XXXXXXX)
 function finish {
-  rm -f "$TMPFILE"
+  rm -f "${TMPFILE}"
   [ "yes_CJAR" == "${remove_sema_cookie_jar}_CJAR" ] && { echo 'NOTE: removing login cookie file' >&2; rm -rf /vagrant/evbays/sema_cookie_jar; } ||:
 }
 trap finish EXIT
 
 [ -e /vagrant/evbays/sema_cookie_jar ] || {
-    echo trying to obtain login cookie from
-    # Note: there may be issues with the log in. To keep things simple, lets just deal with that when grabbing the status later on
+    echo trying to obtain login cookie from network.semaconnect.com
+    # Note: there may be issues with the log in. To keep things simple, lets just deal with that when sanity checking the data later on
     curl --max-time 60 --silent --show-error -c /vagrant/evbays/sema_cookie_jar -d "${SEMA_LOGIN}" https://network.semaconnect.com/validate_login.php
 }
 
