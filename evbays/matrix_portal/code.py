@@ -59,11 +59,7 @@ def one_sec_tick():
         value / adafruit_lis3dh.STANDARD_GRAVITY for value in lis3dh.acceleration
     ]
     if not flat_coord:
-        flat_coord = (
-            x,
-            y,
-            z,
-        )
+        flat_coord = (x, y, z)
         print(f"Flat calibration: {x} {y} {z}")
         return
 
@@ -99,9 +95,11 @@ def grab_values():
     display_helpers.draw_update_bar(1, 1)
     last_values, values_changed = fetch()
     secs_since_fetch = 0
-    display_helpers.draw_update_bar(0, FETCH_INTERVAL)
-    display_helpers.set_top_text(last_values["text"])
 
+    if not last_values:
+        raise ValueError("bad last_values")
+
+    display_helpers.set_top_text(last_values.get("text"))
     if not values_changed:
         no_change += 1
         print(f"No changes {no_change}")
@@ -110,7 +108,7 @@ def grab_values():
         return
 
     no_change = 0
-    for bay_number, value in enumerate(last_values["bays"], start=1):
+    for bay_number, value in enumerate(last_values.get("bays", []), start=1):
         if value == "0":
             display_helpers.group_add_available(bay_number)
         elif value == "1":
@@ -146,8 +144,10 @@ while True:
                     pass
                 TS_INTERVALS[ts_interval].fun()
             except (ValueError, RuntimeError) as e:
-                print(f"Error in {ts_interval}, retrying in 10s: {e}")
-                tss[ts_interval] = (now - TS_INTERVALS[ts_interval].interval) + 10
+                print(f"Error in {ts_interval}, retrying in 22s: {e}")
+                tss[ts_interval] = (
+                    time.monotonic() - TS_INTERVALS[ts_interval].interval
+                ) + 22
                 continue
             except Exception as e:
                 print(f"Failed {ts_interval}: {e}")

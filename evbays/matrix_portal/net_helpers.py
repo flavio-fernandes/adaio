@@ -48,12 +48,14 @@ class IO_HTTP:
 def connect_wifi():
     global wifi
 
-    esp32_cs = DigitalInOut(board.ESP_CS)
-    esp32_ready = DigitalInOut(board.ESP_BUSY)
-    esp32_reset = DigitalInOut(board.ESP_RESET)
-    spi = busio.SPI(board.SCK, board.MOSI, board.MISO)
-    esp = ESP_SPIcontrol(spi, esp32_cs, esp32_ready, esp32_reset)
-    wifi = ESPSPI_WiFiManager(esp, secrets)
+    if not wifi:
+        esp32_cs = DigitalInOut(board.ESP_CS)
+        esp32_ready = DigitalInOut(board.ESP_BUSY)
+        esp32_reset = DigitalInOut(board.ESP_RESET)
+        spi = busio.SPI(board.SCK, board.MOSI, board.MISO)
+        esp = ESP_SPIcontrol(spi, esp32_cs, esp32_ready, esp32_reset)
+        wifi = ESPSPI_WiFiManager(esp, secrets, debug=False)
+
     try:
         wifi.connect()
     except Exception as e:
@@ -70,11 +72,10 @@ def fetch():
     global last_values
     global wifi
 
-    if not wifi:
-        connect_wifi()
+    connect_wifi()
 
     last_update = f"{last_values.get('last-update')}"
-
+    failed = False
     try:
         print("Collecting...")
         del last_values
@@ -82,9 +83,9 @@ def fetch():
         gc.collect()
 
         for name in (
+            "text",
             "bays",
             "last-update",
-            "text",
         ):
             data = IO_HTTP.receive_data("ev." + name)
             last_values[name] = data.get("value", "")
@@ -93,11 +94,20 @@ def fetch():
             time.sleep(1)
     except RuntimeError as e1:
         print(f"Retriable error {e1}")
-        return {}, False
+        failed = True
     except Exception as e2:
         print(f"FATAL! Unable to get data: {e2}")
         time.sleep(120)
         microcontroller.reset()
+
+    if failed:
+        try:
+            wifi.esp.reset()
+            return {}, False
+        except Exception as e3:
+            print(f"FATAL! Unable to get data: {e3}")
+            time.sleep(60)
+            microcontroller.reset()
 
     values_changed = last_update != last_values.get("last-update")
     print(f"last_values: {last_values}")
