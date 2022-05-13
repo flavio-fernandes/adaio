@@ -28,6 +28,13 @@ If you use this case, please make sure to thank David!
 There are a few more 
 [pictures of this project here]( https://www.flickr.com/gp/38447095@N00/361f58).
 
+#### Adafruit Show and Tell
+
+Adafruit offers guides along with products that make it easy to build the EVbays display.
+JP and Liz hosted [Show and Tell](https://www.youtube.com/c/adafruit/videos) on May 4th, 2022 and
+I had the honor of [showing the project](https://youtu.be/VTTvp8WajEI?t=1145) to them.
+
+[![EVbays demo](https://img.youtube.com/vi/VTTvp8WajEI/3.jpg)](https://youtu.be/VTTvp8WajEI?t=1145)
 
 ### secrets.py
 
