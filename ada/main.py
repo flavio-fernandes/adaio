@@ -180,7 +180,11 @@ def handle_aio_cmd(_feed_id, payload):
 def handle_home_motion(feed_id, payload):
     translate_payload = {"true": 1, "false": 0}
     payload2 = translate_payload.get(payload, payload)
-    return feed_id, payload2
+    # "zwave/shed/notification/endpoint_0/Home_Security/Motion_sensor_status"  value: "8"
+    # "zwave/shed/notification/endpoint_0/Home_Security/Motion_sensor_status"  value: "0"
+    translate_payload_shed = {"8": 1, "0": 0}
+    payload3 = translate_payload_shed.get(payload2, payload2)
+    return feed_id, payload3
 
 
 def handle_home_zone(feed_id, payload):

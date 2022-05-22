@@ -8,7 +8,6 @@ AIO_EV_BAYS = "ev"
 AIO_HOME_TEMP = 'home-temperature'
 AIO_HOME_HUMIDITY = 'home-humidity'
 AIO_HOME_LIGHT = 'home-lux'
-AIO_HOME_BATTERY = 'home-battery'
 AIO_HOME_MOTION = 'home-motion'
 AIO_HOME_ZONE = 'home-zone'
 AIO_HOME_CONTACT = AIO_HOME_ZONE
@@ -81,9 +80,7 @@ LOCAL_ENTRIES = [
     TOPIC_ENTRY("/kitchen_steps/oper_flag/motion", AIO_HOME_MOTION, "garage"),
     TOPIC_ENTRY("/motionbox1/oper_flag/motion", AIO_HOME_MOTION, "basement"),
     TOPIC_ENTRY("/officeClock/motion", AIO_HOME_MOTION, "office"),
-    TOPIC_ENTRY("zwave/shed/sensor_binary/endpoint_0/Any", AIO_HOME_MOTION, "shed"),
-
-    # TOPIC_ENTRY("zwave/shed/battery/endpoint_0/level", AIO_HOME_BATTERY, "shed"),  # not useful
+    TOPIC_ENTRY("zwave/shed/notification/endpoint_0/Home_Security/Motion_sensor_status", AIO_HOME_MOTION, "shed"),
 
     TOPIC_ENTRY("/garage_door/zelda", AIO_HOME_ZONE, "garage-east"),
     TOPIC_ENTRY("/garage_door/zen", AIO_HOME_ZONE, "garage-west"),
