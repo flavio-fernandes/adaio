@@ -1,4 +1,4 @@
-from alarm.time import TimeAlarm
+from alarm import time as alarm_time
 from alarm import exit_and_deep_sleep_until_alarms
 import board
 import displayio
@@ -84,7 +84,7 @@ def go_to_sleep():
     print("zzz")
     # https://github.com/adafruit/Adafruit_CircuitPython_MatrixPortal/issues/84
     time.sleep(DEEP_SLEEP_SECS)
-    time_alarm = TimeAlarm(monotonic_time=time.monotonic() + 3)
+    time_alarm = alarm_time.TimeAlarm(monotonic_time=time.monotonic() + 3)
     exit_and_deep_sleep_until_alarms(time_alarm)
 
 
@@ -96,13 +96,10 @@ def grab_values():
     last_values, values_changed = fetch()
     secs_since_fetch = 0
 
-    if not last_values:
-        raise ValueError("bad last_values")
-
     display_helpers.set_top_text(last_values.get("text"))
-    if not values_changed:
+    if (not values_changed) or (not last_values):
         no_change += 1
-        print(f"No changes {no_change}")
+        print(f"No changes {no_change}. last_values: {last_values}")
         if no_change > 3:
             go_to_sleep()
         return

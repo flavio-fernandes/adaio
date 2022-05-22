@@ -7,6 +7,7 @@ import time
 from datetime import datetime, timedelta
 from os import environ as env
 
+import requests
 from apscheduler.schedulers.background import BackgroundScheduler
 from six.moves import queue
 
@@ -454,8 +455,8 @@ def processEVBaysEvent(event):
         return
 
     last_update = datetime.now()
-    # mqttadaio.publish("last-update-iso", last_update.isoformat(), const.AIO_EV_BAYS)
-    mqttadaio.publish("last-update", last_update.strftime("%a %I:%M"), const.AIO_EV_BAYS)
+    last_update_str = last_update.strftime("%a %I:%M")
+    mqttadaio.publish("last-update", last_update_str, const.AIO_EV_BAYS)
     mqttadaio.publish("last-update-pretty", last_update.strftime("%c"), const.AIO_EV_BAYS)
 
     # for each changed bays, publish to adafruit io
@@ -463,7 +464,6 @@ def processEVBaysEvent(event):
         bay_name = changed_bay.name.lower().replace("westford-", "bay")
         mqttadaio.publish(f"{bay_name}-status", changed_bay.status, const.AIO_EV_BAYS)
         mqttadaio.publish(f"{bay_name}", changed_bay.statuscode, const.AIO_EV_BAYS)
-        # mqttadaio.publish(f"{bay_name}-ts", changed_bay.ts, const.AIO_EV_BAYS)
         mqttadaio.publish(f"{bay_name}-simpletime", changed_bay.simpletime, const.AIO_EV_BAYS)
 
     # publish text and bays every time a change on bays is detected
@@ -471,6 +471,17 @@ def processEVBaysEvent(event):
         mqttadaio.publish("bays", bays, const.AIO_EV_BAYS)
         mqttadaio.publish("text", "EV Bays", const.AIO_EV_BAYS)
         mqttadaio.publish("available", f"{available_bays}", const.AIO_EV_BAYS)
+
+    # publish to evbays k8 app
+    try:
+        evbays_data = {"last-update": last_update_str,
+                       "bays": bays}
+        if changed_bays:
+            evbays_data["text"] = "EV Bays"
+        r = requests.post("https://evbays.flaviof.dev/data", json=evbays_data)
+    except Exception as e:
+        logger.error("failed post to evbays.flaviof.dev %s status_code %s", e, r.status_code)
+
 
 
 def processEvent(event):

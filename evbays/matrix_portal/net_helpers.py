@@ -12,37 +12,23 @@ wifi = None
 last_values = {}
 
 
-class IO_HTTP:
-    __version__ = "0.0.0-auto.0"
-    CLIENT_HEADERS = {
-        "User-Agent": f"AIO-CircuitPython/{__version__}",
-        "X-AIO-KEY": secrets["aio_key"],
-    }
+def receive_data():
+    response = wifi.get("https://evbays.flaviof.dev/data", timeout=60)
 
-    @staticmethod
-    def _handle_error(response):
-        if response.status_code // 100 != 2:
-            print(f"error {response.status_code}: {response.content}")
-            raise RuntimeError
-
-    @staticmethod
-    def _compose_path(path):
-        return "https://io.adafruit.com/api/v2/{0}/{1}".format(
-            secrets["aio_username"], path
-        )
-
-    @staticmethod
-    def _get(path):
-        response = wifi.get(path, headers=IO_HTTP.CLIENT_HEADERS, timeout=60)
-        IO_HTTP._handle_error(response)
-        json_data = response.json()
+    if response.status_code // 100 != 2:
+        print(f"error {response.status_code}: {response.content}")
         response.close()
-        return json_data
+        raise RuntimeError
 
-    @staticmethod
-    def receive_data(feed_key):
-        path = IO_HTTP._compose_path("feeds/{0}/data/last".format(feed_key))
-        return IO_HTTP._get(path)
+    try:
+        json_data = response.json()
+    except Exception as e:
+        print(f"FATAL! Unable to parse response: {e} {response.content}")
+        response.close()
+        raise RuntimeError
+
+    response.close()
+    return json_data
 
 
 def connect_wifi():
@@ -79,19 +65,8 @@ def fetch():
     try:
         print("Collecting...")
         del last_values
-        last_values = {}
         gc.collect()
-
-        for name in (
-            "text",
-            "bays",
-            "last-update",
-        ):
-            data = IO_HTTP.receive_data("ev." + name)
-            last_values[name] = data.get("value", "")
-            print(f"got:{name} mem_free:{gc.mem_free()}")
-            del data
-            time.sleep(1)
+        last_values = receive_data()
     except RuntimeError as e1:
         print(f"Retriable error {e1}")
         failed = True
@@ -111,4 +86,5 @@ def fetch():
 
     values_changed = last_update != last_values.get("last-update")
     print(f"last_values: {last_values}")
+    print(f"mem_free:{gc.mem_free()}")
     return last_values, values_changed
