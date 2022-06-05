@@ -240,8 +240,12 @@ def _start_periodic_jobs():
                       id='periodic_attic_cam_keep_alive',
                       replace_existing=True)
     scheduler.add_job(_evbays_clear_ts, 'cron', day_of_week="*",
+                      hour='04', minute=44, second=44,
+                      id='periodic_evbays_clear_ts_am',
+                      replace_existing=True)
+    scheduler.add_job(_evbays_clear_ts, 'cron', day_of_week="*",
                       hour='23', minute=23, second=23,
-                      id='periodic_evbays_clear_ts',
+                      id='periodic_evbays_clear_ts_pm',
                       replace_existing=True)
     # Add catch all clearing motion. Just in case... :)
     scheduler.add_job(_fetch_attic_motion_value, 'interval', minutes=33,
@@ -459,29 +463,43 @@ def processEVBaysEvent(event):
     mqttadaio.publish("last-update", last_update_str, const.AIO_EV_BAYS)
     mqttadaio.publish("last-update-pretty", last_update.strftime("%c"), const.AIO_EV_BAYS)
 
+    # https://io.adafruit.com/icons-faq
+    STATUS_ICON_MAP = {'Available': 'empty', 'In use': 'automobile'}
+    STATUS_ICON_BAD = 'frown-o'
+
     # for each changed bays, publish to adafruit io
     for changed_bay in changed_bays:
         bay_name = changed_bay.name.lower().replace("westford-", "bay")
         mqttadaio.publish(f"{bay_name}-status", changed_bay.status, const.AIO_EV_BAYS)
+        mqttadaio.publish(f"{bay_name}-status-icon", STATUS_ICON_MAP.get(changed_bay.status, STATUS_ICON_BAD), const.AIO_EV_BAYS)
         mqttadaio.publish(f"{bay_name}", changed_bay.statuscode, const.AIO_EV_BAYS)
         mqttadaio.publish(f"{bay_name}-simpletime", changed_bay.simpletime, const.AIO_EV_BAYS)
 
-    # publish text and bays every time a change on bays is detected
+    # publish bays every time a change on bays is detected
     if changed_bays:
         mqttadaio.publish("bays", bays, const.AIO_EV_BAYS)
-        mqttadaio.publish("text", "EV Bays", const.AIO_EV_BAYS)
         mqttadaio.publish("available", f"{available_bays}", const.AIO_EV_BAYS)
+
+    evbays_headers = {"Content-Type": "application/json"}
+    evbays_data = {"last-update": last_update_str, "bays": bays, "text": "EV Bays"}
 
     # publish to evbays k8 app
     try:
-        evbays_data = {"last-update": last_update_str,
-                       "bays": bays}
-        if changed_bays:
-            evbays_data["text"] = "EV Bays"
-        r = requests.post("https://evbays.flaviof.dev/data", json=evbays_data)
+        r_do = requests.post("https://evbays.flaviof.dev/data", headers=evbays_headers, json=evbays_data)
     except Exception as e:
-        logger.error("failed post to evbays.flaviof.dev %s status_code %s", e, r.status_code)
+        logger.error("failed post to evbays.flaviof.dev %s status_code %s", e, r_do.status_code)
 
+    # publish to evbays aws lambda
+    aws_endpoint = env.get('AWS_EVBAYS_ENDPOINT')
+    if not aws_endpoint:
+        return
+    aws_api_key = env.get('AWS_EVBAYS_API_KEY')
+    if aws_api_key:
+        evbays_headers["x-api-key"] = aws_api_key
+    try:
+        r_aws = requests.post(aws_endpoint, headers=evbays_headers, json=evbays_data)
+    except Exception as e:
+        logger.error("failed post to aws evbays %s status_code %s", e, r_aws.status_code)
 
 
 def processEvent(event):
