@@ -10,11 +10,13 @@ from secrets import secrets
 
 wifi = None
 last_values = {}
+data_endpoint = secrets.get("data_endpoint", "https://evbays.flaviof.dev/data")
 
 
 def receive_data():
-    response = wifi.get("https://evbays.flaviof.dev/data", timeout=60)
+    global data_endpoint
 
+    response = wifi.get(data_endpoint, timeout=60)
     if response.status_code // 100 != 2:
         print(f"error {response.status_code}: {response.content}")
         response.close()
