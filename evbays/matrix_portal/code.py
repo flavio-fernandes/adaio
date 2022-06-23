@@ -1,4 +1,4 @@
-from alarm.time import TimeAlarm
+from alarm import time as alarm_time
 from alarm import exit_and_deep_sleep_until_alarms
 import board
 import displayio
@@ -10,7 +10,10 @@ import display_helpers
 from net_helpers import fetch
 from consts import FETCH_INTERVAL, DEEP_SLEEP_SECS
 import adafruit_lis3dh
+from microcontroller import watchdog as wd
+from watchdog import WatchDogMode
 
+dog_is_enabled = False
 no_change = 0
 secs_since_fetch = 0
 lis3dh = adafruit_lis3dh.LIS3DH_I2C(board.I2C(), address=0x19)
@@ -19,6 +22,19 @@ flat_coord = None
 
 def run_once():
     global lis3dh
+    global dog_is_enabled
+
+    enable_dog = True
+    if enable_dog:
+        print("--------------------------------------------------------")
+        print("IMPORTANT: watch dog is enabled! To disable it, do:")
+        print("from microcontroller import watchdog as wd ; wd.deinit()")
+        print("--------------------------------------------------------")
+        wd.timeout = 15  # timeout in seconds
+        wd.mode = WatchDogMode.RESET
+        dog_is_enabled = True
+    else:
+        no_dog()
 
     displayio.release_displays()
     matrix = rgbmatrix.RGBMatrix(
@@ -50,6 +66,9 @@ def one_sec_tick():
     global secs_since_fetch
     global lis3dh
     global flat_coord
+
+    if dog_is_enabled:
+        wd.feed()
 
     display_helpers.draw_update_bar(secs_since_fetch, FETCH_INTERVAL)
     display_helpers.refresh_battery_levels()
@@ -83,9 +102,21 @@ def go_to_sleep():
     display_helpers.draw_a_blank()
     print("zzz")
     # https://github.com/adafruit/Adafruit_CircuitPython_MatrixPortal/issues/84
-    time.sleep(DEEP_SLEEP_SECS)
-    time_alarm = TimeAlarm(monotonic_time=time.monotonic() + 3)
-    exit_and_deep_sleep_until_alarms(time_alarm)
+    displayio.release_displays()
+    if no_dog():
+        time_alarm = alarm_time.TimeAlarm(
+            monotonic_time=time.monotonic() + DEEP_SLEEP_SECS
+        )
+        exit_and_deep_sleep_until_alarms(time_alarm)
+
+    print("Really light sleep...")
+    secs_left = DEEP_SLEEP_SECS
+    while secs_left > 0:
+        secs_left -= 3
+        time.sleep(3)
+        wd.feed()
+
+    microcontroller.reset()
 
 
 def grab_values():
@@ -96,13 +127,10 @@ def grab_values():
     last_values, values_changed = fetch()
     secs_since_fetch = 0
 
-    if not last_values:
-        raise ValueError("bad last_values")
-
     display_helpers.set_top_text(last_values.get("text"))
-    if not values_changed:
+    if (not values_changed) or (not last_values):
         no_change += 1
-        print(f"No changes {no_change}")
+        print(f"No changes {no_change}. last_values: {last_values}")
         if no_change > 3:
             go_to_sleep()
         return
@@ -117,6 +145,17 @@ def grab_values():
             display_helpers.group_set_offline(bay_number)
 
 
+def no_dog():
+    global dog_is_enabled
+
+    try:
+        wd.deinit()
+        dog_is_enabled = False
+    except Exception as e:
+        print(f"could not disable watchdog: {e}")
+    return not dog_is_enabled
+
+
 run_once()
 
 TS = namedtuple("TS", "interval fun")
@@ -126,6 +165,7 @@ TS_INTERVALS = {
     "grab_values": TS(FETCH_INTERVAL, grab_values),
 }
 tss = {interval: None for interval in TS_INTERVALS}
+
 while True:
     now = time.monotonic()
     for ts_interval in TS_INTERVALS:
