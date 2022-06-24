@@ -458,6 +458,8 @@ def processEVBaysEvent(event):
         logger.warning("unable to parse json ev bays %s", e)
         return
 
+    mqttclient.do_mqtt_publish(const.AIO_LOCAL_EVBAYS, bays)
+
     last_update = datetime.now()
     last_update_str = last_update.strftime("%a %I:%M")
     mqttadaio.publish("last-update", last_update_str, const.AIO_EV_BAYS)
