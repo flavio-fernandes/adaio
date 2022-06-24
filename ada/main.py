@@ -486,10 +486,10 @@ def processEVBaysEvent(event):
     evbays_data = {"last-update": last_update_str, "bays": bays, "text": "EV Bays"}
 
     # publish to evbays k8 app
-    try:
-        r_do = requests.post("https://evbays.flaviof.dev/data", headers=evbays_headers, json=evbays_data)
-    except Exception as e:
-        logger.error("failed post to evbays.flaviof.dev %s status_code %s", e, r_do.status_code)
+    ## try:
+    ##     r_do = requests.post("https://evbays.flaviof.dev/data", headers=evbays_headers, json=evbays_data)
+    ## except Exception as e:
+    ##     logger.error("failed post to evbays.flaviof.dev %s status_code %s", e, r_do.status_code)
 
     # publish to evbays aws lambda
     aws_endpoint = env.get('AWS_EVBAYS_ENDPOINT')
