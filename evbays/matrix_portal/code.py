@@ -8,10 +8,14 @@ import gc
 from collections import namedtuple
 import display_helpers
 from net_helpers import fetch
-from consts import FETCH_INTERVAL, DEEP_SLEEP_SECS
+from consts import DEEP_SLEEP_SECS
+from consts import ENABLE_DOG
+from consts import FETCH_INTERVAL
 import adafruit_lis3dh
+from microcontroller import reset
 from microcontroller import watchdog as wd
 from watchdog import WatchDogMode
+import sys
 
 dog_is_enabled = False
 no_change = 0
@@ -24,8 +28,7 @@ def run_once():
     global lis3dh
     global dog_is_enabled
 
-    enable_dog = True
-    if enable_dog:
+    if ENABLE_DOG:
         print("--------------------------------------------------------")
         print("IMPORTANT: watch dog is enabled! To disable it, do:")
         print("from microcontroller import watchdog as wd ; wd.deinit()")
@@ -34,6 +37,7 @@ def run_once():
         wd.mode = WatchDogMode.RESET
         dog_is_enabled = True
     else:
+        print("NOTE: watch dog is disabled")
         no_dog()
 
     displayio.release_displays()
@@ -102,8 +106,8 @@ def go_to_sleep():
     display_helpers.draw_a_blank()
     print("zzz")
     # https://github.com/adafruit/Adafruit_CircuitPython_MatrixPortal/issues/84
-    displayio.release_displays()
     if no_dog():
+        displayio.release_displays()
         time_alarm = alarm_time.TimeAlarm(
             monotonic_time=time.monotonic() + DEEP_SLEEP_SECS
         )
@@ -115,8 +119,9 @@ def go_to_sleep():
         secs_left -= 3
         time.sleep(3)
         wd.feed()
+        print(f"...{secs_left}...")
 
-    microcontroller.reset()
+    reset()
 
 
 def grab_values():
