@@ -70,6 +70,7 @@ LOCAL_ENTRIES = [
     TOPIC_ENTRY("/basement_window/oper_uptime_minutes", AIO_UPTIME_MINUTES, "basement"),
     TOPIC_ENTRY("/master_bedroom/oper_uptime_minutes", AIO_UPTIME_MINUTES, "master-bedroom"),
     TOPIC_ENTRY("/attic/oper_uptime_minutes", AIO_UPTIME_MINUTES, "attic"),
+    TOPIC_ENTRY("/onoffpins/status", [AIO_UPTIME_MINUTES, AIO_MEMORY], "onoffpins-ring"),
 
     TOPIC_ENTRY("/buttonbox2/uptime", AIO_UPTIME_MINUTES, "trellis-office"),
     TOPIC_ENTRY("/buttonbox2/memory", AIO_MEMORY, "trellis-office"),
