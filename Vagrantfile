@@ -1,6 +1,17 @@
 # -*- mode: ruby -*-
 # vi: set ft=ruby :
 
+$py38 = <<SCRIPT
+set -o errexit
+
+apt-get install -y python3.8
+apt-get install -y python3.8-dev python3.8-venv
+# update-alternatives --install /usr/bin/python python /usr/bin/python3.8 1
+update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.8 1
+apt-get install -y python3-pip
+update-alternatives --install /usr/bin/pip pip /usr/bin/pip3 1
+SCRIPT
+
 $bootstrap_basic = <<SCRIPT
 set -o errexit
 
@@ -13,7 +24,8 @@ apt-get update
 apt-get -y upgrade
 
 timedatectl set-timezone America/New_York
-apt-get install -y git wget vim emacs
+
+apt-get install -y git wget vim emacs-nox
 
 # ip route
 apt-get install -y net-tools
@@ -22,10 +34,6 @@ apt-get install -y net-tools
 #apt-get install -y telnet tmate
 apt-get install -y locales
 localedef -f UTF-8 -i en_US en_US.UTF-8
-
-apt-get install -y python3-dev python3-pip python3-venv
-update-alternatives --install /usr/bin/python python /usr/bin/python3 1
-update-alternatives --install /usr/bin/pip pip /usr/bin/pip3 1
 
 passwd -l root
 
@@ -110,10 +118,14 @@ Vagrant.configure(2) do |config|
     config.vm.provision :shell do |shell|
         shell.path = 'provision/provision_mqtt_broker.sh'
     end
-    config.vm.provision :shell do |shell|
-        shell.privileged = false
-        shell.path = 'provision/provision_ring_mqtt.sh'
-    end
+    # config.vm.provision :shell do |shell|
+    #     shell.privileged = false
+    #     shell.path = 'provision/provision_ring_mqtt.sh'
+    # end
+
+    config.vm.provision "py38", type: "shell",
+        inline: $py38
+
     config.vm.provision :shell do |shell|
         shell.privileged = false
         shell.path = 'provision/provision_evbays.sh'

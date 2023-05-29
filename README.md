@@ -19,8 +19,10 @@ These are the attributes you will need after renaming this file to _secrets.txt_
 export ADAFRUIT_IO='https://io.adafruit.com'
 export IO_USERNAME='username'
 export IO_KEY='aio_xxxxxx'
-#export IO_HOME_WEATHER='1234'
 #export IO_RANDOM_ID='4321'
+#export OPENWEATHER_API='api_goes_here'
+#export OPENWEATHER_CITY_ID='city_id_goes_here'
+#export OPENWEATHER_INTERVAL='595'
 ```
 
 ## const.py
