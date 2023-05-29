@@ -24,7 +24,6 @@ from Adafruit_IO import RequestError as RestRequestError
 ADAFRUIT_IO_KEY = env['IO_KEY']
 ADAFRUIT_IO_USERNAME = env['IO_USERNAME']
 ADAFRUIT_IO_TIMEZONE = env.get('IO_TIMEZONE', 'America/New_York')
-ADAFRUIT_IO_FORECAST_ID = env.get('IO_HOME_WEATHER')
 ADAFRUIT_IO_RANDOM_ID = env.get('IO_RANDOM_ID')
 
 CMDQ_SIZE = 900
@@ -183,14 +182,10 @@ def _check_subscription():
     for group_id in _state.group_ids:
         _state.aio_client.subscribe_group(group_id, qos=1)
         time.sleep(0.5)
-    if ADAFRUIT_IO_FORECAST_ID:
-        for forecast in _state.forecasts:
-            _state.aio_client.subscribe_weather(ADAFRUIT_IO_FORECAST_ID, forecast)
-            time.sleep(0.5)
     if ADAFRUIT_IO_RANDOM_ID:
         _state.aio_client.subscribe_randomizer(ADAFRUIT_IO_RANDOM_ID)
     # _state.aio_client.subscribe_time('iso')
-    logger.info("client %s subscribed to feeds, groups weather", _state.mqtt_client_id)
+    logger.info("client %s subscribed to feeds", _state.mqtt_client_id)
     # reset timer, so we do not subscribe again until next msg expiration
     _state.lastMsgTimeStamp = datetime.now()
 

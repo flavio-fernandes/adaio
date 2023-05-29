@@ -326,22 +326,8 @@ def processMqttMsgEvent(client_id, topic, payload):
         topic_entry = const.MQTT_REMOTE_MAP.get(feed_id)
         if not topic_entry:
             return
-        if topic_entry.local == const.AIO_TOPIC_WEATHER_CURRENT:
-            logger.debug("got aio weather: %s", payload)
-            try:
-                payload_dict = json.loads(payload)
-                precipProbability = payload_dict.get('precipProbability', 0)
-                # https://stackoverflow.com/questions/10772066/escaping-special-character-in-a-url
-                # https://www.url-encode-decode.com/
-                payload_dict['precipProbabilityPercent'] = "{}+%25".format(
-                    int(precipProbability * 100))
-                payload2 = json.dumps(payload_dict)
-            except ValueError as e:
-                logger.warning("unable to parse json aio weather %s", e)
-                payload2 = payload
-        else:
-            translate_payload = {"1": "on", "0": "off"}
-            payload2 = translate_payload.get(str(payload), payload)
+        translate_payload = {"1": "on", "0": "off"}
+        payload2 = translate_payload.get(str(payload), payload)
         mqttclient.do_mqtt_publish(topic_entry.local, payload2)
 
 
@@ -432,6 +418,32 @@ def processOWeatherEvent(event):
     for topic, mqtt_payload in oweather_topics.items():
         mqttclient.do_mqtt_publish('/openweather/{}'.format(topic), mqtt_payload)
 
+    logger.debug("translating oweather into aio weather")
+    try:
+        aioweather_payload = oweather_to_aioweather(payload)
+        mqttclient.do_mqtt_publish(const.AIO_TOPIC_WEATHER_CURRENT, json.dumps(aioweather_payload))
+    except ValueError as e:
+        logger.warning("unable to translate oweather to aio weather %s", e)
+
+def oweather_to_aioweather(ow):
+    aiow = {}
+    aiow['summary'] = ow.get('weather',[{}])[0].get('description', '')
+    aiow['windSpeed'] = int(ow.get('wind',{}).get('speed', 0))
+    aiow['precipProbabilityPercent'] = ''
+    aiow['pressure'] = ow.get('main',{}).get('pressure', '?')
+    aiow['nearestStormDistance'] = ''
+    aiow['visibility'] = ow.get('visibility', '?')
+    aiow['dewPoint'] = ow.get('main',{}).get('feels_like', '?')
+    aiow['cloudCover'] = ow.get('clouds',{}).get('all', '?')
+    aiow['windGust'] = int(ow.get('wind',{}).get('gust', 0))
+    aiow['windDeg'] = ow.get('wind',{}).get('deg', '?')
+    aiow['precipIntensity'] = ''
+    aiow['temperature'] = ow.get('main',{}).get('temp', '?')
+    aiow['apparentTemperature'] = ''
+    aiow['humidity'] = ow.get('main',{}).get('humidity', '?')
+    aiow['uvIndex'] = ''
+    aiow['ozone'] = ''
+    return aiow
 
 def processSenseEnergyEvent(event):
     if event.name != "SenseEnergyEvent":

@@ -14,7 +14,6 @@ AIO_HOME_CONTACT = AIO_HOME_ZONE
 AIO_HOME_MOTION_ATTIC = '{}.attic'.format(AIO_HOME_MOTION)
 AIO_HOME_MOTION_ATTIC_CAM = '{}.attic-camera'.format(AIO_HOME_MOTION)
 AIO_HOME_ELECTRIC = 'electric-meters'
-AIO_HOME_ELECTRIC_BASELINE = 'baseline-electric'
 AIO_HOME_ELECTRIC_DEVICE = 'home-device'
 AIO_HOME_SOLAR_RATE = 'solar-rate'
 AIO_MEMORY = 'device-free-memory'
@@ -27,7 +26,7 @@ AIO_RING_CMD_RESTART = "restart"
 AIO_LOCAL_EVBAYS = "/evbays"
 
 AIO_GROUPS = [AIO_HOME_TEMP, AIO_HOME_HUMIDITY, AIO_HOME_MOTION, AIO_HOME_ELECTRIC,
-              AIO_HOME_ELECTRIC_BASELINE, AIO_HOME_ELECTRIC_DEVICE]
+              AIO_HOME_ELECTRIC_DEVICE]
 
 # topics triggered locally
 LOCAL_ENTRIES = [
@@ -94,7 +93,6 @@ LOCAL_ENTRIES = [
     TOPIC_ENTRY("/zwave/minisplit/watts", AIO_HOME_ELECTRIC, "mini-split-power"),
     TOPIC_ENTRY("/zwave/minisplit/kwh", AIO_HOME_ELECTRIC, "mini-split"),
     TOPIC_ENTRY("/electric_meter/#", AIO_HOME_ELECTRIC, ""),
-    TOPIC_ENTRY("/electric_meter_baseline/#", AIO_HOME_ELECTRIC_BASELINE, ""),
     TOPIC_ENTRY("/sense/data/#", AIO_HOME_ELECTRIC, ""),
     TOPIC_ENTRY("/sense/device/#", AIO_HOME_ELECTRIC_DEVICE, ""),
 
@@ -116,7 +114,6 @@ REMOTE_ENTRIES = [
     TOPIC_ENTRY("/attic/motion", AIO_HOME_MOTION, AIO_HOME_MOTION_ATTIC),
 
     TOPIC_ENTRY(AIO_TOPIC_RANDOMIZER, "randomizer", "words"),
-    TOPIC_ENTRY(AIO_TOPIC_WEATHER_CURRENT, "weather", "current"),
 ]
 
 AIO_FEED_IDS = [entry.feed_id for entry in REMOTE_ENTRIES]
