@@ -51,6 +51,24 @@ value is still republished at least once an hour. Feeds listed in
 `AIO_FEED_DEDUP_EXEMPT` bypass unchanged-value suppression and publish every
 value.
 
+### Feed creation
+
+Adafruit IO creates a feed on the fly when a publish names a key it does not know,
+and that auto-create is not atomic: two publishes for a brand new key arriving in
+the same instant leave two feeds sharing one key, splitting the history in half.
+That is easy to hit, since the publish rate limiter batches values while it sleeps.
+
+To avoid it, the first publish for a feed key creates the feed (and its group, when
+needed) over the rest api first. The set of existing keys is fetched once per
+process, and a key that already exists costs nothing. A publish still goes out even
+when the rest call fails, since losing a value is worse than the rare race.
+
+Use [bin/aio-feeds](https://github.com/flavio-fernandes/adaio/blob/master/bin/aio-feeds)
+to audit this: `--duplicates` lists feed keys that ended up with more than one feed,
+`--missing` lists feed keys in `const.py` that do not exist on Adafruit IO yet, and
+`--delete-id <id> --yes` removes one feed by id, which is the only way to act on a
+duplicated key.
+
 ## Vagrant
 
 The [Vagrantfile](https://github.com/flavio-fernandes/adaio/blob/master/Vagrantfile)

@@ -1,0 +1,154 @@
+#!/usr/bin/env python3
+"""Inspect Adafruit IO feeds: find duplicated keys and feeds not created yet.
+
+The Adafruit_IO Feed model drops the feed id, and a duplicated key can only be
+acted on by id, so this talks to the rest api directly.
+"""
+import argparse
+import collections
+import os
+import sys
+
+import requests
+
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir))
+
+from ada import const  # noqa: E402
+from ada.publishfilter import feed_key  # noqa: E402
+
+TIMEOUT = 30
+
+
+def die(msg: str, rc: int = 1) -> None:
+    print(f"ERROR: {msg}", file=sys.stderr)
+    sys.exit(rc)
+
+
+def get_creds() -> tuple:
+    username = os.environ.get("IO_USERNAME")
+    key = os.environ.get("IO_KEY")
+
+    if not username:
+        die("IO_USERNAME is not set. Did you source .secrets?")
+    if not key:
+        die("IO_KEY is not set. Did you source .secrets?")
+
+    return username, key
+
+
+def api(method: str, username: str, key: str, path: str):
+    url = f"https://io.adafruit.com/api/v2/{username}/{path}"
+    try:
+        response = requests.request(method, url, headers={"X-AIO-Key": key}, timeout=TIMEOUT)
+    except Exception as e:
+        die(f"adafruit io request failed: {e}")
+    if response.status_code >= 400:
+        die(f"adafruit io {method} {path} returned {response.status_code}: {response.text}")
+    return response.json() if response.text else None
+
+
+def wanted_keys() -> list:
+    """Feed keys const.py publishes to, skipping the ones only known at runtime.
+
+    Only LOCAL_ENTRIES matter here: those are the publishes that make adafruit
+    io auto-create a feed. REMOTE_ENTRIES are subscriptions, not publishes.
+    """
+    keys = set()
+
+    for entry in const.LOCAL_ENTRIES:
+        # A wildcard entry has an empty feed_id: its feed name comes from the
+        # topic when the message arrives, so there is nothing to check here.
+        if not entry.feed_id:
+            continue
+        group_ids = (entry.group_id if isinstance(entry.group_id, list)
+                     else [entry.group_id])
+        for group_id in group_ids:
+            # Pseudo groups such as /aio/local/cmd never reach adafruit.io.
+            if group_id and group_id.startswith("/"):
+                continue
+            keys.add(feed_key(entry.feed_id, group_id))
+
+    return sorted(keys)
+
+
+def show_feed(feed: dict, indent: str = "  ") -> None:
+    print(f"{indent}id {feed['id']}"
+          f" created {feed['created_at']}"
+          f" updated {feed['updated_at']}"
+          f" last value {feed['last_value']!r}")
+
+
+def show_duplicates(username: str, key: str) -> int:
+    feeds = api("GET", username, key, "feeds")
+    by_key = collections.defaultdict(list)
+    for feed in feeds:
+        by_key[feed["key"]].append(feed)
+
+    duplicates = sorted(k for k, v in by_key.items() if len(v) > 1)
+    if not duplicates:
+        print(f"no duplicated keys among {len(feeds)} feeds")
+        return 0
+
+    for dup in duplicates:
+        print(f"{dup}: {len(by_key[dup])} feeds share this key")
+        for feed in by_key[dup]:
+            show_feed(feed)
+    print("\nkeep the feed worth keeping and remove the others:"
+          " aio-feeds --delete-id <id> --yes")
+    return 1
+
+
+def show_missing(username: str, key: str) -> int:
+    feeds = api("GET", username, key, "feeds")
+    existing = {feed["key"] for feed in feeds}
+
+    missing = [k for k in wanted_keys() if k not in existing]
+    if not missing:
+        print("every feed key in const.py exists on adafruit.io")
+        return 0
+
+    print("feed keys in const.py that do not exist yet:")
+    for k in missing:
+        print(f"  {k}")
+    return 1
+
+
+def delete_feed(username: str, key: str, feed_id: int, yes: bool) -> int:
+    feed = api("GET", username, key, f"feeds/{feed_id}")
+    print(f"{feed['key']}")
+    show_feed(feed)
+
+    if not yes:
+        print("\nnot deleting: pass --yes to confirm")
+        return 1
+
+    api("DELETE", username, key, f"feeds/{feed_id}")
+    print(f"\ndeleted feed id {feed_id}")
+    return 0
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__,
+                                     formatter_class=argparse.RawDescriptionHelpFormatter)
+    action = parser.add_mutually_exclusive_group()
+    action.add_argument("--duplicates", action="store_true",
+                        help="show feed keys that have more than one feed (default)")
+    action.add_argument("--missing", action="store_true",
+                        help="show feed keys from const.py that do not exist yet")
+    action.add_argument("--delete-id", type=int, metavar="ID",
+                        help="delete a single feed by its numeric id")
+    parser.add_argument("--yes", action="store_true",
+                        help="required to actually perform --delete-id")
+
+    args = parser.parse_args()
+    username, key = get_creds()
+
+    if args.delete_id is not None:
+        return delete_feed(username, key, args.delete_id, args.yes)
+    if args.missing:
+        return show_missing(username, key)
+    return show_duplicates(username, key)
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

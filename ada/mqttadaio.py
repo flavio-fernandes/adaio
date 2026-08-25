@@ -21,6 +21,8 @@ from os import environ as env
 # Import Adafruit IO MQTT client. It is actually an mqtt client wrapper.
 from Adafruit_IO import MQTTClient
 from Adafruit_IO import Client as RestClient
+from Adafruit_IO import Feed as RestFeed
+from Adafruit_IO import Group as RestGroup
 from Adafruit_IO import RequestError as RestRequestError
 
 ADAFRUIT_IO_KEY = env['IO_KEY']
@@ -55,6 +57,7 @@ class State(object):
         self.aio_client_update_ts = None
         self.aio_rest_client = None
         self.aio_rest_feeds = set()
+        self.aio_rest_feeds_primed = False
         self.lastMsgTimeStamp = None
         # Fork-boundary invariant: publish() runs in the parent, while _publish()
         # runs in the child. Keep mutable dedup state in the child so only
@@ -243,6 +246,65 @@ def _publish_now(feed_id, value=None, group_id=None):
     return True
 
 
+# Adafruit IO creates a feed on the fly when a publish names a key it does not
+# know. That auto-create is not atomic: two publishes for a brand new key racing
+# in the same instant leave two feeds sharing one key. Create feeds explicitly
+# over rest, so the very first publish always names a feed that already exists.
+def _prime_known_feeds():
+    global _state
+
+    if _state.aio_rest_feeds_primed:
+        return True
+    if not _state.aio_rest_client:
+        return False
+    try:
+        with stopit.ThreadingTimeout(30.30, swallow_exc=False) as timeout_ctx:
+            feeds = _state.aio_rest_client.feeds()
+    except Exception as e:
+        logger.error("failed to list aio feeds timeout_ctx %s %s", timeout_ctx, e)
+        return False
+    keys = [feed.key for feed in feeds]
+    duplicates = sorted({k for k in keys if keys.count(k) > 1})
+    if duplicates:
+        logger.error("adafruit.io has feeds sharing a key: %s", ", ".join(duplicates))
+    _state.aio_rest_feeds.update(keys)
+    _state.aio_rest_feeds_primed = True
+    logger.info("primed %d known aio feed keys via rest", len(keys))
+    return True
+
+
+def _ensure_group(group):
+    global _state
+
+    try:
+        _state.aio_rest_client.groups(group)
+        return
+    except RestRequestError:
+        pass
+    logger.info("creating aio group %s via rest", group)
+    _state.aio_rest_client.create_group(RestGroup(name=group))
+
+
+def _ensure_feed(feed_id, group_id, key):
+    global _state
+
+    if not _prime_known_feeds() or key in _state.aio_rest_feeds:
+        return
+    group = group_id.replace("_", "-") if group_id else None
+    # Add the key even when creating fails, so a feed we cannot create does not
+    # turn every message for it into another rest call.
+    _state.aio_rest_feeds.add(key)
+    try:
+        with stopit.ThreadingTimeout(30.30, swallow_exc=False) as timeout_ctx:
+            if group:
+                _ensure_group(group)
+            _state.aio_rest_client.create_feed(RestFeed(name=feed_id), group_key=group)
+    except Exception as e:
+        logger.error("failed to create aio feed %s timeout_ctx %s %s", key, timeout_ctx, e)
+        return
+    logger.info("created aio feed %s via rest", key)
+
+
 def _publish(feed_id, value=None, group_id=None):
     global _state
     key = feed_key(feed_id, group_id)
@@ -251,6 +313,8 @@ def _publish(feed_id, value=None, group_id=None):
         logger.debug("suppressed unchanged aio_client feed %s %s counters %s",
                      key, value, _state.publish_filter.counters)
         return False
+    # Best effort: publish even when this fails, as losing a value is worse.
+    _ensure_feed(feed_id, group_id, key)
     if not _publish_now(feed_id, value, group_id):
         return False
     _state.publish_filter.record_published(key, value)

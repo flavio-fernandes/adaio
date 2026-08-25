@@ -66,6 +66,7 @@ LOCAL_ENTRIES = [
     TOPIC_ENTRY("/pyportalhallway/light", AIO_HOME_LIGHT, "pyportal-hallway"),
     TOPIC_ENTRY("/pyportalkitchen/light", AIO_HOME_LIGHT, "pyportal-kitchen"),
     TOPIC_ENTRY("zwave/shed/sensor_multilevel/endpoint_0/Illuminance", AIO_HOME_LIGHT, "shed"),
+    TOPIC_ENTRY("/bedclock/light", AIO_HOME_LIGHT, "bedclock"),
 
     TOPIC_ENTRY("/pyportalhallway/status", [AIO_UPTIME_MINUTES, AIO_MEMORY], "pyportal-hallway"),
     TOPIC_ENTRY("/pyportalkitchen/status", [AIO_UPTIME_MINUTES, AIO_MEMORY], "pyportal-kitchen"),
