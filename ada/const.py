@@ -23,7 +23,7 @@ AIO_FEED_DENYLIST = frozenset([
     'electric-watts.sensor-mystery-motor-1-power-watts',
 ])
 # Maximum seconds to suppress an unchanged publish before sending a heartbeat.
-AIO_PUBLISH_DEDUP_MAX_AGE_SECS = 3600
+AIO_PUBLISH_DEDUP_MAX_AGE_SECS = 1800
 # Dotted '<group>.<feed>' keys that must publish every value even when unchanged.
 AIO_FEED_DEDUP_EXEMPT = frozenset()
 
