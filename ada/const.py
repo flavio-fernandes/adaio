@@ -76,11 +76,13 @@ LOCAL_ENTRIES = [
     TOPIC_ENTRY("/master_bedroom/oper_uptime_minutes", AIO_UPTIME_MINUTES, "master-bedroom"),
     TOPIC_ENTRY("/attic/oper_uptime_minutes", AIO_UPTIME_MINUTES, "attic"),
     TOPIC_ENTRY("/onoffpins/status", [AIO_UPTIME_MINUTES, AIO_MEMORY], "onoffpins-ring"),
+    TOPIC_ENTRY("/bedclock/oper_uptime_minutes", AIO_UPTIME_MINUTES, "bedclock"),
 
     TOPIC_ENTRY("/buttonbox2/uptime", AIO_UPTIME_MINUTES, "trellis-office"),
     TOPIC_ENTRY("/buttonbox2/memory", AIO_MEMORY, "trellis-office"),
     TOPIC_ENTRY("/officeclock/oper_state/mem_available_kb", AIO_MEMORY, "oclock-available-kb"),
     TOPIC_ENTRY("/officeclock/oper_state/mem_free_kb", AIO_MEMORY, "oclock-free-kb"),
+    TOPIC_ENTRY("/bedclock/oper_state/mem_available_kb", AIO_MEMORY, "bedclock-available-kb"),
 
     TOPIC_ENTRY("/officeclock/oper_state/cpu_load_1min", AIO_CPU, "oclock-load-1min"),
     TOPIC_ENTRY("/officeclock/oper_state/cpu_load_5min", AIO_CPU, "oclock-load-5min"),
