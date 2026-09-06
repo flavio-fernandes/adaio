@@ -1,10 +1,13 @@
 #!/usr/bin/env python
 from datetime import datetime
+from datetime import timedelta
 import multiprocessing
+import paho.mqtt.client as mqtt
 from ratelimiter import RateLimiter
 import requests
 import signal
 import sys
+import threading
 import time
 
 import dill
@@ -34,6 +37,16 @@ CMDQ_SIZE = 900
 CMDQ_GET_TIMEOUT = 300    # seconds
 CONNECT_TIMEOUT = 180     # seconds
 RE_SUBSCRIBE_TIME = 1201  # seconds
+# adafruit.io answers a client that redials too eagerly with "Not authorized",
+# so wait longer between attempts instead of hammering it.
+CONNECT_BACKOFF_MIN_SECS = 5
+CONNECT_BACKOFF_MAX_SECS = 300
+# Publishes paho refuses in a row before the client counts as broken.
+PUBLISH_FAILURES_MAX = 5
+# How long the client may stay unusable before this process gives up and exits
+# to be rebuilt from scratch.
+STUCK_TIMEOUT = 900       # seconds
+LOOP_STOP_TIMEOUT = 15    # seconds
 _state = None
 
 TIME_SERVICE = (
@@ -55,6 +68,12 @@ class State(object):
         self.aio_client = None
         self.aio_client_connected = False
         self.aio_client_update_ts = None
+        # Last moment the client was known good. The decision to stop trying
+        # and let the process be restarted is measured against it.
+        self.aio_client_healthy_ts = datetime.now()
+        self.aio_connect_after_ts = None
+        self.aio_connect_backoff_secs = CONNECT_BACKOFF_MIN_SECS
+        self.publish_failures = 0
         self.aio_rest_client = None
         self.aio_rest_feeds = set()
         self.aio_rest_feeds_primed = False
@@ -119,22 +138,133 @@ def client_message_callback(_client, topic, payload):
     _enqueue_cmd((_notifyMqttMsgEvent, params))
 
 
+def _elapsed_secs(since_ts):
+    if not since_ts:
+        return 0
+    return int((datetime.now() - since_ts).total_seconds())
+
+
+def _harden_aio_client(aio_client):
+    """Keep a callback from taking the paho network loop down with it.
+
+    Adafruit_IO's own on_connect/on_disconnect handlers raise MQTTError on any
+    non-zero result code, and an unexpected disconnect is a non-zero result
+    code. paho re-raises that out of its network thread, which ends the thread
+    for good: nothing reconnects afterwards, the flags the callbacks maintain
+    keep reporting whatever they last reported, and published packets pile up
+    in an out queue no one drains any more. That is how feeds go stale for
+    hours while the service still looks like it is running.
+    """
+    paho_client = aio_client._client
+    paho_client.suppress_exceptions = True
+    paho_client.reconnect_delay_set(min_delay=CONNECT_BACKOFF_MIN_SECS,
+                                    max_delay=CONNECT_BACKOFF_MAX_SECS)
+
+
+def _aio_client_is_connected():
+    """Whether the client is connected, without trusting a flag that can lie.
+
+    Adafruit_IO answers from a bool it sets in its callbacks, so a network loop
+    that died before running them leaves it answering True forever. Ask paho as
+    well, and believe neither one once the loop that maintains them is gone.
+
+    Every client we hold has had loop_background() called on it -- one that
+    could not be looped never makes it into the state -- so no network thread
+    at all is as good as a dead one. paho clears the attribute in loop_stop()
+    and could grow other reasons to; a client whose loop we cannot see is one
+    whose flags nobody is maintaining.
+    """
+    global _state
+
+    aio_client = _state.aio_client
+    if not aio_client:
+        return False
+    paho_client = aio_client._client
+    loop_thread = getattr(paho_client, "_thread", None)
+    if loop_thread is None or not loop_thread.is_alive():
+        return False
+    return bool(aio_client.is_connected() and paho_client.is_connected())
+
+
+def _stop_network_loop(paho_client):
+    """loop_stop() with a bound on the wait; False when the loop will not end.
+
+    paho's own loop_stop() joins its network thread with no timeout, and a join
+    that never returns cannot be broken out of by stopit: an asynchronous
+    exception is delivered between bytecodes, never inside a blocking lock
+    acquire. Waiting there forever would wedge this whole process.
+    """
+    loop_thread = getattr(paho_client, "_thread", None)
+    paho_client._thread_terminate = True
+    if loop_thread is None or loop_thread is threading.current_thread():
+        return True
+    loop_thread.join(LOOP_STOP_TIMEOUT)
+    if loop_thread.is_alive():
+        return False
+    paho_client._thread = None
+    return True
+
+
+def _give_up_if_stuck():
+    """Exit once the client cannot be talked back into working.
+
+    Restarting is what a person ends up doing anyway, so do it for them: the
+    parent notices this child died and takes the service down with it, and
+    systemd starts everything again from scratch.
+    """
+    global _state
+
+    stuck_secs = _elapsed_secs(_state.aio_client_healthy_ts)
+    if stuck_secs < STUCK_TIMEOUT:
+        return
+    raise RuntimeError(
+        "adafruit.io client unusable for {} seconds; exiting to be restarted".format(stuck_secs))
+
+
 def _nuke_aio_client(_state):
     if not _state.aio_client:
         return
 
+    logger.info("releasing _state.aio_client")
+    paho_client = _state.aio_client._client
     try:
         with stopit.ThreadingTimeout(13.90, swallow_exc=False) as timeout_ctx:
-            logger.info("releasing _state.aio_client")
             _state.aio_client.disconnect()
-            _state.aio_client._client.loop_stop()
-            del _state.aio_client
     except Exception as e:
-        logger.error("failed to release _state.aio_client timeout_ctx %s %s",
+        logger.error("failed to disconnect _state.aio_client timeout_ctx %s %s",
                      timeout_ctx, e)
+    loop_stopped = _stop_network_loop(paho_client)
+
     _state.aio_client = None
     _state.aio_client_connected = False
     _state.aio_client_update_ts = None
+    _state.publish_failures = 0
+    _state.aio_connect_after_ts = (datetime.now() +
+                                   timedelta(seconds=_state.aio_connect_backoff_secs))
+    _state.aio_connect_backoff_secs = min(_state.aio_connect_backoff_secs * 2,
+                                          CONNECT_BACKOFF_MAX_SECS)
+    if not loop_stopped:
+        raise RuntimeError("adafruit.io network loop will not stop; exiting to be restarted")
+
+
+def _build_aio_client():
+    global _state
+
+    aio_client = MQTTClient(ADAFRUIT_IO_USERNAME, ADAFRUIT_IO_KEY, secure=True)
+    aio_client.on_message = client_message_callback
+    _harden_aio_client(aio_client)
+    _state.aio_client = aio_client
+    _state.aio_client_connected = False
+    _state.aio_client_update_ts = datetime.now()
+    _state.publish_failures = 0
+    try:
+        aio_client.connect()
+        aio_client.loop_background()
+    except Exception as e:
+        logger.error("failed to connect aio_client: %s", e)
+        _nuke_aio_client(_state)
+        return
+    logger.debug("aio_client connect called")
 
 
 def _iterate_aio_client():
@@ -144,32 +274,44 @@ def _iterate_aio_client():
         _state.aio_rest_client = RestClient(ADAFRUIT_IO_USERNAME, ADAFRUIT_IO_KEY)
 
     if not _state.aio_client:
-        _state.aio_client = MQTTClient(ADAFRUIT_IO_USERNAME, ADAFRUIT_IO_KEY, secure=True)
-        _state.aio_client.on_message = client_message_callback
-        _state.aio_client_connected = False
-        _state.aio_client_update_ts = datetime.now()
-        _state.aio_client.connect()
-        _state.aio_client.loop_background()
-        logger.debug("aio_client connect called")
-        return
-
-    is_connected = _state.aio_client.is_connected()
-    if _state.aio_client_update_ts and not is_connected:
-        tdelta = datetime.now() - _state.aio_client_update_ts
-        tdeltaSecs = int(tdelta.total_seconds())
-        if tdeltaSecs >= CONNECT_TIMEOUT:
-            _nuke_aio_client(_state)
+        _give_up_if_stuck()
+        if _state.aio_connect_after_ts and datetime.now() < _state.aio_connect_after_ts:
             return
-
-    _check_subscription()
-    if is_connected == _state.aio_client_connected:
+        _build_aio_client()
         return
 
-    # If execution makes it this far, is_connected is changing
-    _state.aio_client_connected = is_connected
-    _state.aio_client_update_ts = datetime.now()
-    _notifyMqttConnectEvent(const.MQTT_CONNECTED
-                            if _state.aio_client_connected else const.MQTT_DISCONNECTED)
+    is_connected = _aio_client_is_connected()
+    if is_connected != _state.aio_client_connected:
+        # Report the change before acting on it. A disconnect that goes
+        # unreported leaves the parent with nothing to watch: it only starts
+        # its own clock once it is told this client dropped.
+        _state.aio_client_connected = is_connected
+        _state.aio_client_update_ts = datetime.now()
+        _notifyMqttConnectEvent(const.MQTT_CONNECTED
+                                if is_connected else const.MQTT_DISCONNECTED)
+        if is_connected:
+            _state.aio_connect_backoff_secs = CONNECT_BACKOFF_MIN_SECS
+            _state.publish_failures = 0
+
+    if is_connected and _state.publish_failures < PUBLISH_FAILURES_MAX:
+        _state.aio_client_healthy_ts = datetime.now()
+        _check_subscription()
+        return
+
+    _give_up_if_stuck()
+
+    # A client that says it is connected but will not send anything is the
+    # worst of the failures: nothing looks wrong while every value is lost.
+    if _state.publish_failures >= PUBLISH_FAILURES_MAX:
+        logger.error("recycling aio_client after %d publishes it would not send",
+                     _state.publish_failures)
+        _nuke_aio_client(_state)
+        return
+
+    if _elapsed_secs(_state.aio_client_update_ts) >= CONNECT_TIMEOUT:
+        logger.warning("recycling aio_client: not connected for %d seconds",
+                       CONNECT_TIMEOUT)
+        _nuke_aio_client(_state)
 
 
 def _check_subscription():
@@ -225,6 +367,13 @@ def _limited(until):
     logger.warning('Self rate limited publish, sleeping for {:d} seconds'.format(duration))
 
 
+def _aio_feed_topic(feed_id, group_id=None):
+    # The very topics Adafruit_IO's MQTTClient.publish() builds.
+    if group_id is not None:
+        return "{0}/feeds/{1}.{2}".format(ADAFRUIT_IO_USERNAME, group_id, feed_id)
+    return "{0}/feeds/{1}".format(ADAFRUIT_IO_USERNAME, feed_id)
+
+
 @RateLimiter(max_calls=30, period=60, callback=_limited)
 def _publish_now(feed_id, value=None, group_id=None):
     global _state
@@ -236,12 +385,23 @@ def _publish_now(feed_id, value=None, group_id=None):
         return False
     try:
         with stopit.ThreadingTimeout(9.90, swallow_exc=False) as timeout_ctx:
-            # logger.debug("publishing mqtt topic %s %s", topic, newState)
-            _state.aio_client.publish(feed_id, value, group_id)
+            # Publish through paho itself: Adafruit_IO builds this same topic
+            # and then drops the result code on the floor, so a value that only
+            # made it as far as an out queue looks just like a delivered one.
+            msg_info = _state.aio_client._client.publish(
+                _aio_feed_topic(feed_id, group_id), payload=value)
     except Exception as e:
         logger.error("failed aio_client publish feed %s %s %s timeout_ctx %s %s",
                      feed_id, value, group_id, timeout_ctx, e)
+        _state.publish_failures += 1
         return False
+    if msg_info.rc != mqtt.MQTT_ERR_SUCCESS:
+        _state.publish_failures += 1
+        logger.error("aio_client would not send feed %s %s %s: %s (%d in a row)",
+                     feed_id, value, group_id, mqtt.error_string(msg_info.rc),
+                     _state.publish_failures)
+        return False
+    _state.publish_failures = 0
     logger.debug("published aio_client feed %s %s %s", feed_id, value, group_id)
     return True
 
@@ -427,7 +587,8 @@ def receive_feed_value(feed_id, group=None):
 
 
 def _signal_handler(_signal, _frame):
-    _state.aio_client.loop_stop()
+    if _state and _state.aio_client:
+        _stop_network_loop(_state.aio_client._client)
     logger.info("process terminated")
     sys.exit(0)
 

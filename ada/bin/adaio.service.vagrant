@@ -2,6 +2,9 @@
 Description=Adafruit IO to local MQTT bridge
 After=network-online.target
 Wants=network-online.target
+# Never give up on restarting: a service left in the failed state is the same
+# outage as a service that is up and doing nothing.
+StartLimitIntervalSec=0
 
 [Service]
 User=ff
@@ -10,8 +13,14 @@ Type=simple
 ExecStartPre=/bin/bash -c 'while :; do [ -x /home/ff/ada.git/ada/bin/start_adaio.sh ] && break; /bin/sleep 1; done'
 ExecStart=/home/ff/ada.git/ada/bin/start_adaio.sh
 
-Restart=on-failure
+Restart=always
 RestartSec=10s
+
+# The main process answers this every trip around its event loop (see
+# ada/sdnotify.py). A loop that stops going around gets the service restarted
+# instead of leaving it running with stale feeds.
+NotifyAccess=main
+WatchdogSec=180s
 
 TimeoutStopSec=15s
 KillMode=control-group
