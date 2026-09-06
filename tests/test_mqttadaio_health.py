@@ -63,29 +63,46 @@ class HealthTestBase(unittest.TestCase):
     def connect_events(self):
         return [e.params[1] for e in self.events if e.name == "MqttConnectEvent"]
 
+    def live_client(self, **kwargs):
+        """A client whose network loop is still running."""
+        keep_running = threading.Event()
+        thread = threading.Thread(target=keep_running.wait)
+        thread.daemon = True
+        thread.start()
+        self.addCleanup(thread.join)
+        self.addCleanup(keep_running.set)
+        return FakeAioClient(thread=thread, **kwargs)
+
+    def dead_client(self, **kwargs):
+        """A client whose network loop ran and then died."""
+        thread = threading.Thread(target=lambda: None)
+        thread.start()
+        thread.join()
+        return FakeAioClient(thread=thread, **kwargs)
+
+    def loopless_client(self, **kwargs):
+        """A client whose network loop is gone without a trace of a thread."""
+        return FakeAioClient(thread=None, **kwargs)
+
 
 class ConnectedTest(HealthTestBase):
     def test_a_dead_network_loop_is_not_connected(self):
-        dead_thread = threading.Thread(target=lambda: None)
-        dead_thread.start()
-        dead_thread.join()
-        mqttadaio._state.aio_client = FakeAioClient(connected=True, thread=dead_thread)
+        mqttadaio._state.aio_client = self.dead_client(connected=True)
 
         # Both the wrapper and paho still claim to be connected; only the gone
         # network loop says otherwise.
         self.assertFalse(mqttadaio._aio_client_is_connected())
 
+    def test_a_missing_network_loop_is_not_connected(self):
+        mqttadaio._state.aio_client = self.loopless_client(connected=True)
+
+        # Same stale flags, with nothing left to even ask about the thread.
+        self.assertFalse(mqttadaio._aio_client_is_connected())
+
     def test_a_live_loop_with_connected_flags_is_connected(self):
-        keep_running = threading.Event()
-        live_thread = threading.Thread(target=keep_running.wait)
-        live_thread.daemon = True
-        live_thread.start()
-        mqttadaio._state.aio_client = FakeAioClient(connected=True, thread=live_thread)
-        try:
-            self.assertTrue(mqttadaio._aio_client_is_connected())
-        finally:
-            keep_running.set()
-            live_thread.join()
+        mqttadaio._state.aio_client = self.live_client(connected=True)
+
+        self.assertTrue(mqttadaio._aio_client_is_connected())
 
     def test_no_client_is_not_connected(self):
         self.assertFalse(mqttadaio._aio_client_is_connected())
@@ -103,15 +120,9 @@ class IterateTest(HealthTestBase):
         mqttadaio._nuke_aio_client = self._saved_nuke
         HealthTestBase.tearDown(self)
 
-    def dead_client(self):
-        dead_thread = threading.Thread(target=lambda: None)
-        dead_thread.start()
-        dead_thread.join()
-        return FakeAioClient(connected=True, thread=dead_thread)
-
     def test_losing_the_connection_is_reported(self):
         state = mqttadaio._state
-        state.aio_client = self.dead_client()
+        state.aio_client = self.dead_client(connected=True)
         state.aio_client_connected = True
         state.aio_client_update_ts = datetime.now() - timedelta(seconds=mqttadaio.CONNECT_TIMEOUT)
 
@@ -126,7 +137,7 @@ class IterateTest(HealthTestBase):
 
     def test_a_connection_that_does_not_come_back_is_recycled(self):
         state = mqttadaio._state
-        state.aio_client = self.dead_client()
+        state.aio_client = self.dead_client(connected=True)
         state.aio_client_connected = False
         state.aio_client_update_ts = datetime.now() - timedelta(seconds=mqttadaio.CONNECT_TIMEOUT)
 
@@ -137,7 +148,8 @@ class IterateTest(HealthTestBase):
 
     def test_refused_publishes_recycle_the_client(self):
         state = mqttadaio._state
-        state.aio_client = FakeAioClient(connected=True)
+        # Genuinely connected, and still refusing to send.
+        state.aio_client = self.live_client(connected=True)
         state.aio_client_connected = True
         state.aio_client_update_ts = datetime.now()
         state.publish_failures = mqttadaio.PUBLISH_FAILURES_MAX
@@ -148,7 +160,7 @@ class IterateTest(HealthTestBase):
 
     def test_a_healthy_client_is_left_alone(self):
         state = mqttadaio._state
-        state.aio_client = FakeAioClient(connected=True)
+        state.aio_client = self.live_client(connected=True)
         state.aio_client_connected = True
         state.aio_client_update_ts = datetime.now()
         state.aio_client_healthy_ts = datetime.now() - timedelta(days=1)
@@ -162,7 +174,7 @@ class IterateTest(HealthTestBase):
 
     def test_an_unusable_client_gives_up_so_the_process_restarts(self):
         state = mqttadaio._state
-        state.aio_client = self.dead_client()
+        state.aio_client = self.dead_client(connected=True)
         state.aio_client_connected = False
         state.aio_client_update_ts = datetime.now()
         state.aio_client_healthy_ts = datetime.now() - timedelta(seconds=mqttadaio.STUCK_TIMEOUT)
@@ -182,7 +194,7 @@ class IterateTest(HealthTestBase):
 class PublishTest(HealthTestBase):
     def test_a_refused_publish_is_not_reported_as_published(self):
         state = mqttadaio._state
-        state.aio_client = FakeAioClient(publish_rc=mqtt.MQTT_ERR_NO_CONN)
+        state.aio_client = self.live_client(publish_rc=mqtt.MQTT_ERR_NO_CONN)
         state.aio_client_connected = True
 
         self.assertFalse(mqttadaio._publish("bedclock", 11, "home-lux"))
@@ -194,7 +206,7 @@ class PublishTest(HealthTestBase):
 
     def test_a_sent_publish_is_recorded(self):
         state = mqttadaio._state
-        state.aio_client = FakeAioClient()
+        state.aio_client = self.live_client()
         state.aio_client_connected = True
 
         self.assertTrue(mqttadaio._publish("bedclock", 11, "home-lux"))

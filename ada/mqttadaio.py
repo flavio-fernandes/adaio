@@ -167,6 +167,12 @@ def _aio_client_is_connected():
     Adafruit_IO answers from a bool it sets in its callbacks, so a network loop
     that died before running them leaves it answering True forever. Ask paho as
     well, and believe neither one once the loop that maintains them is gone.
+
+    Every client we hold has had loop_background() called on it -- one that
+    could not be looped never makes it into the state -- so no network thread
+    at all is as good as a dead one. paho clears the attribute in loop_stop()
+    and could grow other reasons to; a client whose loop we cannot see is one
+    whose flags nobody is maintaining.
     """
     global _state
 
@@ -175,7 +181,7 @@ def _aio_client_is_connected():
         return False
     paho_client = aio_client._client
     loop_thread = getattr(paho_client, "_thread", None)
-    if loop_thread is not None and not loop_thread.is_alive():
+    if loop_thread is None or not loop_thread.is_alive():
         return False
     return bool(aio_client.is_connected() and paho_client.is_connected())
 
