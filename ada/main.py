@@ -20,6 +20,7 @@ from ada import mqttadaio
 from ada import mqttadaiothrottle
 from ada import mqttclient
 from ada import oweather
+from ada import sdnotify
 from ada import senseenergy
 
 EVENTQ_SIZE = 1000
@@ -27,12 +28,34 @@ EVENTQ_GET_TIMEOUT = 15  # seconds
 
 
 class ProcessBase(multiprocessing.Process):
+    # Longest a single trip around this child's loop is expected to take. Its
+    # command queue timeout dominates, so each child sets its own.
+    max_iteration_secs = EVENTQ_GET_TIMEOUT
+
     def __init__(self, client_id_param, eventq_param):
         multiprocessing.Process.__init__(self)
         self.client_id = client_id_param
         self.eventq = eventq_param
         self.cmdq = None
         self.disconnect_ts = None
+        # Written by the child, read by the parent. A child can stay alive with
+        # a wedged loop -- a network thread that died holding nothing but its
+        # flags, a queue nobody drains -- and looking alive is exactly what
+        # made the last outage last for hours.
+        self.heartbeat = multiprocessing.Value('d', time.time())
+
+    def beat(self):
+        self.heartbeat.value = time.time()
+
+    @property
+    def heartbeat_age_secs(self):
+        return time.time() - self.heartbeat.value
+
+    @property
+    def heartbeat_timeout_secs(self):
+        # Two full iterations of slack, so a child that merely runs long is
+        # never mistaken for one that stopped.
+        return (self.max_iteration_secs * 2) + 60
 
     def putEvent(self, event):
         try:
@@ -47,6 +70,8 @@ class ProcessBase(multiprocessing.Process):
 
 
 class MqttclientProcess(ProcessBase):
+    max_iteration_secs = mqttclient.CMDQ_GET_TIMEOUT
+
     def __init__(self, eventq_param):
         ProcessBase.__init__(self, const.MQTT_CLIENT_LOCAL, eventq_param)
         self.cmdq = mqttclient.do_init(self.putEvent)
@@ -54,10 +79,13 @@ class MqttclientProcess(ProcessBase):
     def run(self):
         logger.debug("mqttclient process started")
         while True:
+            self.beat()
             mqttclient.do_iterate()
 
 
 class MqttAdaIoProcess(ProcessBase):
+    max_iteration_secs = mqttadaio.CMDQ_GET_TIMEOUT
+
     def __init__(self, eventq_param):
         ProcessBase.__init__(self, const.MQTT_CLIENT_AIO, eventq_param)
         self.cmdq = mqttadaio.do_init(self.putEvent)
@@ -65,10 +93,13 @@ class MqttAdaIoProcess(ProcessBase):
     def run(self):
         logger.debug("mqtt ada io process started")
         while True:
+            self.beat()
             mqttadaio.do_iterate()
 
 
 class MqttAdaIoThrottleProcess(ProcessBase):
+    max_iteration_secs = mqttadaiothrottle.CMDQ_GET_TIMEOUT
+
     def __init__(self, eventq_param):
         ProcessBase.__init__(self, const.MQTT_CLIENT_AIO_THROTTLE, eventq_param)
         self.cmdq = mqttadaiothrottle.do_init(self.putEvent)
@@ -76,6 +107,7 @@ class MqttAdaIoThrottleProcess(ProcessBase):
     def run(self):
         logger.debug("mqtt ada io throttle process started")
         while True:
+            self.beat()
             mqttadaiothrottle.do_iterate()
 
 
@@ -83,14 +115,20 @@ class OWeatherProcess(ProcessBase):
     def __init__(self, eventq_param):
         ProcessBase.__init__(self, None, eventq_param)
         self.cmdq = oweather.do_init(self.putEvent)
+        # The fetch interval is configurable, so read it back rather than
+        # assuming the default.
+        self.max_iteration_secs = oweather.fetch_interval_secs()
 
     def run(self):
         logger.debug("openweather process started")
         while True:
+            self.beat()
             oweather.do_iterate()
 
 
 class SenseEnergyProcess(ProcessBase):
+    max_iteration_secs = senseenergy.CMDQ_GET_TIMEOUT
+
     def __init__(self, eventq_param):
         ProcessBase.__init__(self, None, eventq_param)
         self.cmdq = senseenergy.do_init(self.putEvent)
@@ -98,6 +136,7 @@ class SenseEnergyProcess(ProcessBase):
     def run(self):
         logger.debug("sense energy process started")
         while True:
+            self.beat()
             senseenergy.do_iterate()
 
 
@@ -380,6 +419,10 @@ def check_child_processes():
             time_to_quit("{} child died".format(p.__class__.__name__))
         if p.cmdq_is_full():
             time_to_quit("{} child has full queue".format(p.__class__.__name__))
+        heartbeat_age = int(p.heartbeat_age_secs)
+        if heartbeat_age > p.heartbeat_timeout_secs:
+            time_to_quit("{} child stopped making progress {} seconds ago".format(
+                p.__class__.__name__, heartbeat_age))
         if p.disconnect_ts:
             disconnect_interval = datetime.now() - p.disconnect_ts
             disconnect_minutes = int(disconnect_interval.total_seconds() / 60)
@@ -452,9 +495,13 @@ def main():
 
         logger.debug("Starting main event processing loop")
         _start_periodic_jobs()
+        sdnotify.ready()
 
         while not stop_gracefully:
             processEvents(EVENTQ_GET_TIMEOUT)
+            # Answering WatchdogSec=. This loop is the last thing that can
+            # wedge without anyone noticing; systemd notices for us.
+            sdnotify.watchdog()
 
             if should_check_children:
                 check_child_processes()
@@ -465,6 +512,8 @@ def main():
         logger.exception("Unexpected failure in main process")
 
     finally:
+        sdnotify.stopping()
+
         if scheduler is not None:
             try:
                 scheduler.shutdown(wait=False)

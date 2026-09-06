@@ -118,6 +118,13 @@ def do_fetch():
     params = []
     return _enqueue_cmd((_fetch, params))
 
+
+# external to this module
+def fetch_interval_secs():
+    # How long do_iterate() may sit in its queue before coming back around.
+    return _state.openweather_fetch_interval if _state else CMDQ_GET_TIMEOUT
+
+
 # =============================================================================
 
 
